@@ -20,6 +20,8 @@ import {
   FileText,
   SlidersHorizontal,
   Truck,
+  Wallet,
+  CreditCard,
 } from "lucide-react";
 import { InventoryCategory, InventoryItem, StockAllocationRecord } from "@/lib/inventoryTypes";
 import { Dealer } from "@/lib/dealerTypes";
@@ -70,12 +72,15 @@ export default function AdminInventoryPage() {
   const [newCategoryName, setNewCategoryName] = useState("");
   const [newCategorySubs, setNewCategorySubs] = useState("");
 
-  // Brand modal state & Bought on Credit flag
+  // Brand modal state & Finance Settlement
   const [isBrandModalOpen, setIsBrandModalOpen] = useState(false);
   const [newBrandName, setNewBrandName] = useState("");
   const [newBrandOrigin, setNewBrandOrigin] = useState("");
   const [formBoughtOnCredit, setFormBoughtOnCredit] = useState(true);
   const [formSplitUnits, setFormSplitUnits] = useState(true);
+  const [formFinanceMode, setFormFinanceMode] = useState<"credit" | "wallet" | "none">("credit");
+  const [formPaymentMode, setFormPaymentMode] = useState<"Cash" | "UPI" | "Bank Transfer" | "Cheque">("Cash");
+  const [formPaymentRef, setFormPaymentRef] = useState("");
 
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -185,6 +190,12 @@ export default function AdminInventoryPage() {
     fetchItems();
   }, [selectedCategory]);
 
+  useEffect(() => {
+    if (!formDealerId && formFinanceMode === "credit") {
+      setFormFinanceMode("wallet");
+    }
+  }, [formDealerId, formFinanceMode]);
+
   const handleOpenAddModal = async () => {
     setError(null);
     await fetchNextCode();
@@ -227,7 +238,10 @@ export default function AdminInventoryPage() {
           splitUnits: Boolean(parseInt(formStockQuantity, 10) > 1 && formSplitUnits),
           dealerId: selectedDealer?.id,
           dealerName: selectedDealer?.name,
-          boughtOnCredit: Boolean(selectedDealer && formBoughtOnCredit),
+          boughtOnCredit: Boolean(selectedDealer && formFinanceMode === "credit"),
+          autoDeductWallet: formFinanceMode === "wallet",
+          paymentMode: formPaymentMode,
+          paymentRef: formPaymentRef.trim() || undefined,
           location: formLocation.trim(),
           notes: formNotes.trim(),
           specs: {
@@ -254,6 +268,9 @@ export default function AdminInventoryPage() {
       setFormSellingPrice("");
       setFormStockQuantity("1");
       setFormDealerId("");
+      setFormFinanceMode("credit");
+      setFormPaymentMode("Cash");
+      setFormPaymentRef("");
       setFormLocation("");
       setFormProcessor("");
       setFormRam("");
@@ -1140,28 +1157,133 @@ export default function AdminInventoryPage() {
                 </div>
               </div>
 
-              {/* Bought On Credit Toggle */}
-              {formDealerId && (
-                <div className="p-3.5 rounded-xl bg-amber-50/80 border border-amber-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      id="boughtOnCreditCheck"
-                      checked={formBoughtOnCredit}
-                      onChange={(e) => setFormBoughtOnCredit(e.target.checked)}
-                      className="w-4 h-4 rounded text-amber-600 focus:ring-amber-500 border-slate-300 cursor-pointer"
-                    />
-                    <label htmlFor="boughtOnCreditCheck" className="text-xs font-bold text-amber-950 cursor-pointer">
-                      Bought on Credit from Dealer (Supplier Debt)
-                    </label>
+              {/* Payment & Accounting Settlement */}
+              {(() => {
+                const totalCost = (parseFloat(formPurchasePrice) || 0) * (parseInt(formStockQuantity, 10) || 1);
+                return (
+                  <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200/80 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                        <Wallet className="w-3.5 h-3.5 text-blue-600" />
+                        Payment & Accounting Settlement
+                      </label>
+                      <span className="text-xs font-semibold text-slate-500">
+                        Total Purchase: <span className="font-bold text-slate-900">₹{totalCost.toLocaleString("en-IN")}</span>
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                      {/* Option 1: Auto Deduct from Wallet */}
+                      <button
+                        type="button"
+                        onClick={() => setFormFinanceMode("wallet")}
+                        className={`p-2.5 rounded-xl border text-left transition cursor-pointer flex flex-col justify-between ${
+                          formFinanceMode === "wallet"
+                            ? "border-emerald-500 bg-emerald-50/70 text-emerald-950 ring-1 ring-emerald-500"
+                            : "border-slate-200 bg-white hover:border-slate-300 text-slate-700"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-[11px] font-bold flex items-center gap-1.5">
+                            <Wallet className="w-3.5 h-3.5 text-emerald-600" />
+                            Auto-Deduct Wallet
+                          </span>
+                          <span className={`w-3 h-3 rounded-full border flex items-center justify-center ${formFinanceMode === "wallet" ? "border-emerald-600 bg-emerald-600" : "border-slate-300"}`}>
+                            {formFinanceMode === "wallet" && <span className="w-1.5 h-1.5 rounded-full bg-white" />}
+                          </span>
+                        </div>
+                        <p className="text-[10px] text-slate-500 leading-snug">
+                          Paid on delivery. Debits shop wallet immediately.
+                        </p>
+                      </button>
+
+                      {/* Option 2: Bought on Credit */}
+                      <button
+                        type="button"
+                        disabled={!formDealerId}
+                        onClick={() => formDealerId && setFormFinanceMode("credit")}
+                        className={`p-2.5 rounded-xl border text-left transition flex flex-col justify-between ${
+                          !formDealerId
+                            ? "border-slate-200 bg-slate-100/60 text-slate-400 opacity-60 cursor-not-allowed"
+                            : formFinanceMode === "credit"
+                            ? "border-amber-500 bg-amber-50/70 text-amber-950 ring-1 ring-amber-500 cursor-pointer"
+                            : "border-slate-200 bg-white hover:border-slate-300 text-slate-700 cursor-pointer"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-[11px] font-bold flex items-center gap-1.5">
+                            <CreditCard className="w-3.5 h-3.5 text-amber-600" />
+                            Bought on Credit
+                          </span>
+                          <span className={`w-3 h-3 rounded-full border flex items-center justify-center ${formFinanceMode === "credit" ? "border-amber-600 bg-amber-600" : "border-slate-300"}`}>
+                            {formFinanceMode === "credit" && <span className="w-1.5 h-1.5 rounded-full bg-white" />}
+                          </span>
+                        </div>
+                        <p className="text-[10px] text-slate-500 leading-snug">
+                          {formDealerId ? "Supplier credit. Pay dealer later." : "Requires dealer selected above"}
+                        </p>
+                      </button>
+
+                      {/* Option 3: No Financial Log */}
+                      <button
+                        type="button"
+                        onClick={() => setFormFinanceMode("none")}
+                        className={`p-2.5 rounded-xl border text-left transition cursor-pointer flex flex-col justify-between ${
+                          formFinanceMode === "none"
+                            ? "border-blue-500 bg-blue-50/70 text-blue-950 ring-1 ring-blue-500"
+                            : "border-slate-200 bg-white hover:border-slate-300 text-slate-700"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-[11px] font-bold flex items-center gap-1.5">
+                            <FileText className="w-3.5 h-3.5 text-slate-500" />
+                            Stock Only
+                          </span>
+                          <span className={`w-3 h-3 rounded-full border flex items-center justify-center ${formFinanceMode === "none" ? "border-blue-600 bg-blue-600" : "border-slate-300"}`}>
+                            {formFinanceMode === "none" && <span className="w-1.5 h-1.5 rounded-full bg-white" />}
+                          </span>
+                        </div>
+                        <p className="text-[10px] text-slate-500 leading-snug">
+                          Record stock count only. No ledger or debt changes.
+                        </p>
+                      </button>
+                    </div>
+
+                    {/* Auto-Deduct Wallet Extra Fields */}
+                    {formFinanceMode === "wallet" && (
+                      <div className="pt-2 border-t border-slate-200/80 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-[10px] font-bold text-slate-600 uppercase tracking-wider mb-1">
+                            Payment Mode (Source of Funds)
+                          </label>
+                          <select
+                            value={formPaymentMode}
+                            onChange={(e) => setFormPaymentMode(e.target.value as any)}
+                            className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 font-medium"
+                          >
+                            <option value="Cash">Cash (Shop Drawer)</option>
+                            <option value="UPI">UPI (GPay / PhonePe / Paytm)</option>
+                            <option value="Bank Transfer">Bank Transfer (IMPS / NEFT)</option>
+                            <option value="Cheque">Cheque</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-bold text-slate-600 uppercase tracking-wider mb-1">
+                            Reference / UTR No. (Optional)
+                          </label>
+                          <input
+                            type="text"
+                            placeholder="e.g. UPI Ref # or Bill #"
+                            value={formPaymentRef}
+                            onChange={(e) => setFormPaymentRef(e.target.value)}
+                            className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                          />
+                        </div>
+                      </div>
+                    )}
                   </div>
-                  <span className="text-[11px] font-semibold text-amber-800">
-                    {formBoughtOnCredit
-                      ? `+₹${((parseFloat(formPurchasePrice) || 0) * (parseInt(formStockQuantity, 10) || 1)).toLocaleString("en-IN")} added to dealer credit`
-                      : "Paid immediately (No dealer debt logged)"}
-                  </span>
-                </div>
-              )}
+                );
+              })()}
 
               <div className="pt-2 flex items-center justify-end gap-2.5">
                 <button

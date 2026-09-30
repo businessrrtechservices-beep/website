@@ -82,6 +82,43 @@ export async function POST(req: NextRequest) {
         }
       }
 
+      // Auto-deduct from wallet if paid immediately on delivery
+      if (body.autoDeductWallet && Number(body.purchasePrice) > 0) {
+        try {
+          const { createTransaction } = await import("@/lib/ledgerDb");
+          const totalPurchaseValue = (Number(body.purchasePrice) || 0) * qty;
+          const codesSummary = createdItems.map((c) => c.code).join(", ");
+          await createTransaction({
+            type: "debit",
+            amount: totalPurchaseValue,
+            paymentMode: body.paymentMode || "Cash",
+            category: "Stock Purchase",
+            reason: `Stock Purchase: ${body.name} x${qty}${body.dealerName ? ` (${body.dealerName})` : ""}`,
+            referenceNumber: body.paymentRef || createdItems[0].code,
+            date: new Date().toISOString(),
+            dealerId: body.dealerId,
+            dealerName: body.dealerName,
+          });
+
+          if (body.dealerId) {
+            const { recordDealerPurchase, recordDealerPayment } = await import("@/lib/dealersDb");
+            await recordDealerPurchase(body.dealerId, totalPurchaseValue, {
+              description: `Stock Purchase (Paid on Delivery): ${body.name} x${qty}`,
+              itemId: createdItems[0].id,
+              itemCode: codesSummary,
+              referenceNumber: body.paymentRef,
+            });
+            await recordDealerPayment(body.dealerId, totalPurchaseValue, {
+              paymentMode: body.paymentMode || "Cash",
+              description: `Payment on delivery: ${body.name} x${qty}`,
+              referenceNumber: body.paymentRef,
+            });
+          }
+        } catch (ledgerErr) {
+          console.error("Failed to auto-deduct from wallet:", ledgerErr);
+        }
+      }
+
       return NextResponse.json({ item: createdItems[0], items: createdItems, count: createdItems.length }, { status: 201 });
     }
 
@@ -117,6 +154,42 @@ export async function POST(req: NextRequest) {
         });
       } catch (dealerErr) {
         console.error("Failed to update dealer purchase balance:", dealerErr);
+      }
+    }
+
+    // Auto-deduct from wallet if paid immediately on delivery (Single item / Batch)
+    if (body.autoDeductWallet && Number(body.purchasePrice) > 0) {
+      try {
+        const { createTransaction } = await import("@/lib/ledgerDb");
+        const totalPurchaseValue = (Number(body.purchasePrice) || 0) * qty;
+        await createTransaction({
+          type: "debit",
+          amount: totalPurchaseValue,
+          paymentMode: body.paymentMode || "Cash",
+          category: "Stock Purchase",
+          reason: `Stock Purchase: ${body.name} x${qty}${body.dealerName ? ` (${body.dealerName})` : ""}`,
+          referenceNumber: body.paymentRef || item.code,
+          date: new Date().toISOString(),
+          dealerId: body.dealerId,
+          dealerName: body.dealerName,
+        });
+
+        if (body.dealerId) {
+          const { recordDealerPurchase, recordDealerPayment } = await import("@/lib/dealersDb");
+          await recordDealerPurchase(body.dealerId, totalPurchaseValue, {
+            description: `Stock Purchase (Paid on Delivery): ${body.name} x${qty}`,
+            itemId: item.id,
+            itemCode: item.code,
+            referenceNumber: body.paymentRef,
+          });
+          await recordDealerPayment(body.dealerId, totalPurchaseValue, {
+            paymentMode: body.paymentMode || "Cash",
+            description: `Payment on delivery: ${body.name} x${qty}`,
+            referenceNumber: body.paymentRef,
+          });
+        }
+      } catch (ledgerErr) {
+        console.error("Failed to auto-deduct from wallet:", ledgerErr);
       }
     }
 
