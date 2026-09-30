@@ -199,11 +199,6 @@ export default function CategoryStrip() {
               <span className="text-[10px] xs:text-[11px] sm:text-xs font-bold tracking-[0.15em] text-slate-500 uppercase border-b-2 border-blue-600 pb-0.5 inline-block">
                 What We Do
               </span>
-              {/* Swipe / Auto-scroll pill badge on mobile */}
-              <span className="inline-flex sm:hidden items-center gap-1 rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-semibold text-blue-600 border border-blue-200/80 shadow-xs">
-                <span className="inline-block h-1.5 w-1.5 rounded-full bg-blue-600 animate-pulse" />
-                Swipe for more
-              </span>
             </div>
             <h2 className="mt-2 text-xl xs:text-2xl sm:text-3xl lg:text-[2rem] font-black text-slate-900 tracking-tight leading-tight">
               Explore Our <span className="text-blue-600">Services</span>
@@ -220,11 +215,10 @@ export default function CategoryStrip() {
               onClick={scrollPrev}
               disabled={!canScrollLeft}
               aria-label="Previous service"
-              className={`flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 shadow-xs transition-all duration-200 hover:border-blue-300 hover:text-blue-600 active:scale-95 ${
-                !canScrollLeft
-                  ? "opacity-40 cursor-not-allowed"
-                  : "hover:shadow-sm"
-              }`}
+              className={`flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 shadow-xs transition-all duration-200 hover:border-blue-300 hover:text-blue-600 active:scale-95 ${!canScrollLeft
+                ? "opacity-40 cursor-not-allowed"
+                : "hover:shadow-sm"
+                }`}
             >
               <ChevronLeft className="h-4 w-4" />
             </button>
@@ -233,11 +227,10 @@ export default function CategoryStrip() {
               onClick={scrollNext}
               disabled={!canScrollRight}
               aria-label="Next service"
-              className={`flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 shadow-xs transition-all duration-200 hover:border-blue-300 hover:text-blue-600 active:scale-95 ${
-                !canScrollRight
-                  ? "opacity-40 cursor-not-allowed"
-                  : "hover:shadow-sm"
-              }`}
+              className={`flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 shadow-xs transition-all duration-200 hover:border-blue-300 hover:text-blue-600 active:scale-95 ${!canScrollRight
+                ? "opacity-40 cursor-not-allowed"
+                : "hover:shadow-sm"
+                }`}
             >
               <ChevronRight className="h-4 w-4" />
             </button>
@@ -249,17 +242,15 @@ export default function CategoryStrip() {
           {/* Left subtle gradient fade when scrolled */}
           <div
             aria-hidden="true"
-            className={`pointer-events-none absolute left-0 top-0 bottom-4 w-8 sm:w-14 bg-gradient-to-r from-slate-50 via-slate-50/70 to-transparent z-10 transition-opacity duration-300 ${
-              canScrollLeft ? "opacity-100" : "opacity-0"
-            }`}
+            className={`pointer-events-none absolute left-0 top-0 bottom-4 w-8 sm:w-14 bg-gradient-to-r from-slate-50 via-slate-50/70 to-transparent z-10 transition-opacity duration-300 ${canScrollLeft ? "opacity-100" : "opacity-0"
+              }`}
           />
 
           {/* Right subtle gradient fade indicating more cards */}
           <div
             aria-hidden="true"
-            className={`pointer-events-none absolute right-0 top-0 bottom-4 w-8 sm:w-14 bg-gradient-to-l from-slate-50 via-slate-50/70 to-transparent z-10 transition-opacity duration-300 ${
-              canScrollRight ? "opacity-100" : "opacity-0"
-            }`}
+            className={`pointer-events-none absolute right-0 top-0 bottom-4 w-8 sm:w-14 bg-gradient-to-l from-slate-50 via-slate-50/70 to-transparent z-10 transition-opacity duration-300 ${canScrollRight ? "opacity-100" : "opacity-0"
+              }`}
           />
 
           <div
@@ -360,11 +351,10 @@ export default function CategoryStrip() {
                   resumeAutoPlay();
                 }}
                 aria-label={`Go to ${cat.label}`}
-                className={`h-1.5 transition-all duration-300 rounded-full ${
-                  activeIndex === idx
-                    ? "w-6 bg-blue-600"
-                    : "w-1.5 bg-slate-300 hover:bg-slate-400"
-                }`}
+                className={`h-1.5 transition-all duration-300 rounded-full ${activeIndex === idx
+                  ? "w-6 bg-blue-600"
+                  : "w-1.5 bg-slate-300 hover:bg-slate-400"
+                  }`}
               />
             ))}
           </div>
