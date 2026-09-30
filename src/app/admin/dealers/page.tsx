@@ -27,17 +27,7 @@ import {
 } from "lucide-react";
 import { Dealer, DealerTransaction } from "@/lib/dealerTypes";
 import { PaymentMode } from "@/lib/ledgerTypes";
-
-const AVAILABLE_CATEGORIES = [
-  "Laptops",
-  "Desktops & Monitors",
-  "Accessories",
-  "Storage & RAM",
-  "Chargers & Batteries",
-  "Screens & Repair Spares",
-  "Networking & Cables",
-  "Software & Licenses",
-];
+import { InventoryCategory } from "@/lib/inventoryTypes";
 
 export default function AdminDealersPage() {
   const [dealers, setDealers] = useState<Dealer[]>([]);
@@ -68,7 +58,8 @@ export default function AdminDealersPage() {
   const [formEmail, setFormEmail] = useState("");
   const [formAddress, setFormAddress] = useState("");
   const [formGstin, setFormGstin] = useState("");
-  const [formCategories, setFormCategories] = useState<string[]>(["Laptops"]);
+  const [formCategories, setFormCategories] = useState<string[]>([]);
+  const [dbCategories, setDbCategories] = useState<InventoryCategory[]>([]);
   const [formNotes, setFormNotes] = useState("");
 
   // Pay Dealer Form
@@ -96,8 +87,21 @@ export default function AdminDealersPage() {
     }
   };
 
+  const fetchCategories = async () => {
+    try {
+      const res = await fetch("/api/inventory/categories");
+      if (res.ok) {
+        const data = await res.json();
+        setDbCategories(data.categories || []);
+      }
+    } catch (err) {
+      console.error("Failed to load categories:", err);
+    }
+  };
+
   useEffect(() => {
     fetchDealers();
+    fetchCategories();
   }, []);
 
   const handleOpenAddModal = () => {
@@ -108,7 +112,7 @@ export default function AdminDealersPage() {
     setFormEmail("");
     setFormAddress("");
     setFormGstin("");
-    setFormCategories(["Laptops"]);
+    setFormCategories([]);
     setFormNotes("");
     setIsAddModalOpen(true);
   };
@@ -782,31 +786,41 @@ export default function AdminDealersPage() {
                 />
               </div>
 
-              {/* Supplied Categories Checkboxes */}
+              {/* Supplied Categories Checkboxes from DB */}
               <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                  Type of Categories Supplied
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5 flex items-center justify-between">
+                  <span>Type of Categories Supplied</span>
+                  <span className="text-[10px] text-slate-400 font-normal">(from MongoDB)</span>
                 </label>
-                <div className="grid grid-cols-2 gap-2">
-                  {AVAILABLE_CATEGORIES.map((cat) => {
-                    const isChecked = formCategories.includes(cat);
-                    return (
-                      <button
-                        key={cat}
-                        type="button"
-                        onClick={() => handleToggleCategory(cat)}
-                        className={`p-2 rounded-xl border text-xs font-bold text-left transition flex items-center justify-between cursor-pointer ${
-                          isChecked
-                            ? "bg-blue-50 border-blue-400 text-blue-800"
-                            : "bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100"
-                        }`}
-                      >
-                        <span>{cat}</span>
-                        {isChecked && <CheckCircle2 className="w-3.5 h-3.5 text-blue-600 shrink-0" />}
-                      </button>
-                    );
-                  })}
-                </div>
+                {dbCategories.length === 0 ? (
+                  <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-500">
+                    No categories registered in database yet. Add categories in the{" "}
+                    <a href="/admin/inventory" className="text-blue-600 font-bold hover:underline">
+                      Inventory section
+                    </a>.
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 gap-2">
+                    {dbCategories.map((cat) => {
+                      const isChecked = formCategories.includes(cat.name);
+                      return (
+                        <button
+                          key={cat.id}
+                          type="button"
+                          onClick={() => handleToggleCategory(cat.name)}
+                          className={`p-2 rounded-xl border text-xs font-bold text-left transition flex items-center justify-between cursor-pointer ${
+                            isChecked
+                              ? "bg-blue-50 border-blue-400 text-blue-800"
+                              : "bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100"
+                          }`}
+                        >
+                          <span>{cat.name}</span>
+                          {isChecked && <CheckCircle2 className="w-3.5 h-3.5 text-blue-600 shrink-0" />}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
 
               <div className="pt-2 flex justify-end gap-2.5">
