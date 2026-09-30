@@ -45,20 +45,16 @@ export default function ProductCard({ product, priority = false }: ProductCardPr
       </span>
 
       {/* Image */}
-      <div className="relative h-32 xs:h-36 sm:h-36 lg:h-40 w-full shrink-0 overflow-hidden bg-slate-100">
+      <div className="relative h-36 xs:h-40 sm:h-40 lg:h-44 w-full shrink-0 overflow-hidden bg-slate-50/80 flex items-center justify-center">
         <Image
           src={product.image}
           alt={product.name}
           fill
           sizes="(max-width: 640px) 50vw, (max-width: 1024px) 50vw, 25vw"
-          className="object-cover transition-transform duration-500 ease-out group-hover:scale-[1.08]"
+          className="object-contain p-2.5 transition-transform duration-500 ease-out group-hover:scale-105"
           priority={priority}
           placeholder="blur"
           blurDataURL="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
-        />
-        <div
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-0 bg-gradient-to-t from-slate-900/40 via-slate-900/0 to-slate-900/0"
         />
 
         {/* WhatsApp floating button */}
