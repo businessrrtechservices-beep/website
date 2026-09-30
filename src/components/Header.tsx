@@ -113,9 +113,9 @@ export default function Header() {
 
       {/* ======================= HEADER ======================= */}
       <header
-        className={`sticky top-0 z-40 w-full border-b bg-white/90 backdrop-blur-md transition-all duration-300 ${scrolled
-            ? "border-slate-200 shadow-[0_1px_12px_-4px_rgba(15,23,42,0.12)]"
-            : "border-slate-100 shadow-none"
+        className={`sticky top-0 z-40 w-full border-b bg-slate-100/95 backdrop-blur-md transition-all duration-300 ${scrolled
+            ? "border-slate-200 shadow-[0_1px_12px_-4px_rgba(15,23,42,0.10)]"
+            : "border-slate-200/60 shadow-none"
           }`}
       >
         <div className="flex h-16 w-full items-center justify-between gap-3 px-3 sm:h-20 sm:px-5 lg:h-24 lg:px-8">

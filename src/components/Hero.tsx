@@ -91,7 +91,7 @@ export default function Hero({ initialConfig }: { initialConfig?: HeroConfig } =
 
   return (
     <section
-      className="relative w-full select-none overflow-hidden bg-white
+      className="relative w-full select-none overflow-hidden bg-slate-100
                  flex flex-col justify-center
                  lg:min-h-[calc(100dvh-96px)] max-h-[1100px]"
       onMouseEnter={() => setIsPaused(true)}
