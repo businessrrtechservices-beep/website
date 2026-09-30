@@ -38,15 +38,21 @@ export async function getMongoClient(): Promise<MongoClient> {
     );
   }
 
+  const clientOptions = {
+    maxPoolSize: 10,
+    serverSelectionTimeoutMS: 5000,
+    socketTimeoutMS: 45000,
+  };
+
   if (process.env.NODE_ENV === "development") {
     if (!global._mongoClientPromise) {
-      client = new MongoClient(uri);
+      client = new MongoClient(uri, clientOptions);
       global._mongoClientPromise = client.connect();
     }
     clientPromise = global._mongoClientPromise;
   } else {
     if (!clientPromise) {
-      client = new MongoClient(uri);
+      client = new MongoClient(uri, clientOptions);
       clientPromise = client.connect();
     }
   }
