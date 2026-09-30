@@ -5,7 +5,7 @@ export interface User {
   username: string;
   email: string;
   password?: string;
-  role: "admin" | "editor" | "viewer";
+  role: "superadmin" | "admin" | "editor" | "viewer";
   name?: string;
   createdAt: Date;
 }
@@ -32,7 +32,7 @@ function getConfiguredAdmin(): { username: string; email: string; password?: str
 }
 
 /**
- * Ensures admin record exists in the MongoDB users table using secure environment variables
+ * Ensures superadmin record exists in the MongoDB users table using secure environment variables
  */
 export async function ensureAdminUser(): Promise<void> {
   const envAdmin = getConfiguredAdmin();
@@ -54,18 +54,18 @@ export async function ensureAdminUser(): Promise<void> {
         username: envAdmin.username,
         email: envAdmin.email,
         password: envAdmin.password,
-        role: "admin",
-        name: "RR Tech Administrator",
+        role: "superadmin",
+        name: "RR Tech Superadmin",
         createdAt: new Date(),
       });
-    } else if (existing.password !== envAdmin.password) {
+    } else {
       await collection.updateOne(
         { _id: (existing as any)._id },
-        { $set: { password: envAdmin.password, role: "admin" } }
+        { $set: { password: envAdmin.password, role: "superadmin", name: "RR Tech Superadmin" } }
       );
     }
   } catch (err) {
-    console.error("Error ensuring admin user in DB:", err);
+    console.error("Error ensuring superadmin user in DB:", err);
   }
 }
 
@@ -123,7 +123,7 @@ export async function verifyUserCredentials(
         success: true,
         user: {
           username: envAdmin.username,
-          role: "admin",
+          role: "superadmin",
           email: envAdmin.email,
         },
       };
@@ -148,7 +148,7 @@ export async function getAllUsers(): Promise<User[]> {
       return [{
         username: envAdmin.username,
         email: envAdmin.email,
-        role: "admin",
+        role: "superadmin",
         createdAt: new Date(),
       }];
     }
