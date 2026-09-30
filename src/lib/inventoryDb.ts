@@ -142,7 +142,7 @@ export async function getInventoryItemById(id: string): Promise<InventoryItem | 
  * Add a new item to stock
  */
 export async function createInventoryItem(
-  data: Omit<InventoryItem, "id" | "createdAt" | "updatedAt" | "availableQuantity" | "allocatedRecords"> & {
+  data: Omit<InventoryItem, "id" | "code" | "createdAt" | "updatedAt" | "availableQuantity" | "allocatedRecords"> & {
     code?: string;
   }
 ): Promise<InventoryItem> {

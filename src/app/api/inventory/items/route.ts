@@ -33,6 +33,58 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Item name and category are required" }, { status: 400 });
     }
 
+    const qty = Math.max(1, parseInt(body.stockQuantity, 10) || 1);
+    const splitUnits = Boolean(body.splitUnits && qty > 1);
+
+    const serialList = Array.isArray(body.serialNumbers)
+      ? body.serialNumbers.filter(Boolean)
+      : typeof body.serialNumbers === "string"
+      ? body.serialNumbers.split(/[\n,]+/).map((s: string) => s.trim()).filter(Boolean)
+      : [];
+
+    if (splitUnits) {
+      const createdItems = [];
+      for (let i = 0; i < qty; i++) {
+        const unitItem = await createInventoryItem({
+          name: body.name.trim(),
+          category: body.category,
+          subcategory: body.subcategory || "General",
+          brand: body.brand?.trim() || "",
+          model: body.model?.trim() || "",
+          condition: body.condition || "Brand New",
+          serialNumbers: serialList[i] ? [serialList[i]] : [],
+          specs: body.specs || {},
+          purchasePrice: Number(body.purchasePrice) || 0,
+          sellingPrice: Number(body.sellingPrice) || 0,
+          stockQuantity: 1,
+          dealerId: body.dealerId || undefined,
+          dealerName: body.dealerName || undefined,
+          boughtOnCredit: Boolean(body.boughtOnCredit),
+          location: body.location || "",
+          notes: body.notes || "",
+        });
+        createdItems.push(unitItem);
+      }
+
+      if (body.dealerId && Number(body.purchasePrice) > 0 && body.boughtOnCredit) {
+        try {
+          const { recordDealerPurchase } = await import("@/lib/dealersDb");
+          const totalPurchaseValue = (Number(body.purchasePrice) || 0) * qty;
+          const codesSummary = createdItems.map((c) => c.code).join(", ");
+          await recordDealerPurchase(body.dealerId, totalPurchaseValue, {
+            description: `Stock on Credit: ${body.name} x${qty} (${codesSummary})`,
+            itemId: createdItems[0].id,
+            itemCode: codesSummary,
+            referenceNumber: createdItems[0].code,
+          });
+        } catch (dealerErr) {
+          console.error("Failed to update dealer purchase balance:", dealerErr);
+        }
+      }
+
+      return NextResponse.json({ item: createdItems[0], items: createdItems, count: createdItems.length }, { status: 201 });
+    }
+
     const item = await createInventoryItem({
       name: body.name.trim(),
       code: body.code?.trim(),
@@ -41,15 +93,11 @@ export async function POST(req: NextRequest) {
       brand: body.brand?.trim() || "",
       model: body.model?.trim() || "",
       condition: body.condition || "Brand New",
-      serialNumbers: Array.isArray(body.serialNumbers)
-        ? body.serialNumbers.filter(Boolean)
-        : typeof body.serialNumbers === "string"
-        ? body.serialNumbers.split(/[\n,]+/).map((s: string) => s.trim()).filter(Boolean)
-        : [],
+      serialNumbers: serialList,
       specs: body.specs || {},
       purchasePrice: Number(body.purchasePrice) || 0,
       sellingPrice: Number(body.sellingPrice) || 0,
-      stockQuantity: Number(body.stockQuantity) || 1,
+      stockQuantity: qty,
       dealerId: body.dealerId || undefined,
       dealerName: body.dealerName || undefined,
       boughtOnCredit: Boolean(body.boughtOnCredit),
@@ -60,9 +108,9 @@ export async function POST(req: NextRequest) {
     if (body.dealerId && Number(body.purchasePrice) > 0 && body.boughtOnCredit) {
       try {
         const { recordDealerPurchase } = await import("@/lib/dealersDb");
-        const totalPurchaseValue = (Number(body.purchasePrice) || 0) * (Number(body.stockQuantity) || 1);
+        const totalPurchaseValue = (Number(body.purchasePrice) || 0) * qty;
         await recordDealerPurchase(body.dealerId, totalPurchaseValue, {
-          description: `Stock on Credit: ${item.name} (${item.code}) x${item.stockQuantity}`,
+          description: `Stock on Credit: ${item.name} (${item.code}) x${qty}`,
           itemId: item.id,
           itemCode: item.code,
           referenceNumber: item.code,

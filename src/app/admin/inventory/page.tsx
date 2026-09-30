@@ -75,6 +75,7 @@ export default function AdminInventoryPage() {
   const [newBrandName, setNewBrandName] = useState("");
   const [newBrandOrigin, setNewBrandOrigin] = useState("");
   const [formBoughtOnCredit, setFormBoughtOnCredit] = useState(true);
+  const [formSplitUnits, setFormSplitUnits] = useState(true);
 
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -223,6 +224,7 @@ export default function AdminInventoryPage() {
           purchasePrice: parseFloat(formPurchasePrice) || 0,
           sellingPrice: parseFloat(formSellingPrice) || 0,
           stockQuantity: parseInt(formStockQuantity, 10) || 1,
+          splitUnits: Boolean(parseInt(formStockQuantity, 10) > 1 && formSplitUnits),
           dealerId: selectedDealer?.id,
           dealerName: selectedDealer?.name,
           boughtOnCredit: Boolean(selectedDealer && formBoughtOnCredit),
@@ -1047,6 +1049,58 @@ export default function AdminInventoryPage() {
                   />
                 </div>
               </div>
+
+              {/* Multi-unit ID Allocation Selector */}
+              {parseInt(formStockQuantity, 10) > 1 && (
+                <div className="p-3.5 rounded-xl bg-blue-50/80 border border-blue-200 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-bold text-slate-800 uppercase tracking-wider">
+                      ID Assignment for {formStockQuantity} Units:
+                    </label>
+                    <span className="text-[10px] text-blue-700 font-bold bg-white px-2 py-0.5 rounded border border-blue-200">
+                      {formSplitUnits ? "Unique ID per Unit" : "1 Batch ID"}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setFormSplitUnits(true)}
+                      className={`p-2.5 rounded-xl border text-xs font-bold flex flex-col items-start gap-1 transition cursor-pointer text-left ${
+                        formSplitUnits
+                          ? "bg-blue-600 text-white border-blue-600 shadow-2xs"
+                          : "bg-white border-slate-200 text-slate-700 hover:bg-slate-50"
+                      }`}
+                    >
+                      <div className="flex items-center gap-1.5 font-bold">
+                        <Laptop className="w-3.5 h-3.5 shrink-0" />
+                        <span>Separate Unique ID for each ({formCode || "RRTS-ITM-1001"}, 1002...)</span>
+                      </div>
+                      <span className={`text-[10.5px] font-normal ${formSplitUnits ? "text-blue-100" : "text-slate-500"}`}>
+                        Recommended for laptops &amp; desktops.
+                      </span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setFormSplitUnits(false)}
+                      className={`p-2.5 rounded-xl border text-xs font-bold flex flex-col items-start gap-1 transition cursor-pointer text-left ${
+                        !formSplitUnits
+                          ? "bg-blue-600 text-white border-blue-600 shadow-2xs"
+                          : "bg-white border-slate-200 text-slate-700 hover:bg-slate-50"
+                      }`}
+                    >
+                      <div className="flex items-center gap-1.5 font-bold">
+                        <Boxes className="w-3.5 h-3.5 shrink-0" />
+                        <span>Single Batch ID (Qty = {formStockQuantity})</span>
+                      </div>
+                      <span className={`text-[10.5px] font-normal ${!formSplitUnits ? "text-blue-100" : "text-slate-500"}`}>
+                        Recommended for mice, cables, RAM &amp; accessories.
+                      </span>
+                    </button>
+                  </div>
+                </div>
+              )}
 
               {/* Dealer Supplier & Shelf Location */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
