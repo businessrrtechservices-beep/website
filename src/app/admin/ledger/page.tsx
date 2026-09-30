@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import { WalletTransaction, WalletSummary, PaymentMode, TransactionType } from "@/lib/ledgerTypes";
 import { Dealer } from "@/lib/dealerTypes";
+import { getISTDateTimeLocal, formatISTDateTime, parseToISTIsoString } from "@/lib/dateUtils";
 
 export default function AdminLedgerPage() {
   const [summary, setSummary] = useState<WalletSummary>({
@@ -49,10 +50,7 @@ export default function AdminLedgerPage() {
   const [formCategory, setFormCategory] = useState("Sale");
   const [formReason, setFormReason] = useState("");
   const [formRef, setFormRef] = useState("");
-  const [formDate, setFormDate] = useState(() => {
-    const now = new Date();
-    return now.toISOString().slice(0, 16);
-  });
+  const [formDate, setFormDate] = useState(() => getISTDateTimeLocal());
 
   // Partner Borrowing / Repayment Flag
   const [isPartnerBorrowing, setIsPartnerBorrowing] = useState(false);
@@ -153,7 +151,7 @@ export default function AdminLedgerPage() {
             type: formType === "credit" ? "borrow" : "repayment",
             amount: parseFloat(formAmount),
             paymentMode: formPaymentMode,
-            date: formDate ? new Date(formDate).toISOString() : new Date().toISOString(),
+            date: parseToISTIsoString(formDate),
             reason: formReason.trim() || (formType === "credit" ? `Borrowed from ${pName}` : `Repaid to ${pName}`),
             referenceNumber: formRef.trim(),
             syncMainLedger: true,
@@ -179,7 +177,7 @@ export default function AdminLedgerPage() {
             referenceNumber: formRef.trim(),
             dealerId: selectedDealer?.id,
             dealerName: selectedDealer?.name,
-            date: formDate ? new Date(formDate).toISOString() : new Date().toISOString(),
+            date: parseToISTIsoString(formDate),
           }),
         });
 
@@ -196,6 +194,7 @@ export default function AdminLedgerPage() {
       setFormRef("");
       setSelectedDealerId("");
       setIsPartnerBorrowing(false);
+      setFormDate(getISTDateTimeLocal());
       await fetchLedger();
     } catch (err: any) {
       setError(err?.message || "Something went wrong");
@@ -243,6 +242,7 @@ export default function AdminLedgerPage() {
           <button
             onClick={() => {
               setError(null);
+              setFormDate(getISTDateTimeLocal());
               setIsModalOpen(true);
             }}
             className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-xs sm:text-sm font-bold text-white transition shadow-sm cursor-pointer"
@@ -425,13 +425,7 @@ export default function AdminLedgerPage() {
               <tbody className="divide-y divide-slate-100 font-medium">
                 {transactions.map((tx) => {
                   const isCredit = tx.type === "credit";
-                  const formattedDate = new Date(tx.date).toLocaleString("en-IN", {
-                    day: "2-digit",
-                    month: "short",
-                    year: "numeric",
-                    hour: "2-digit",
-                    minute: "2-digit",
-                  });
+                  const formattedDate = formatISTDateTime(tx.date);
 
                   return (
                     <tr key={tx.id} className="hover:bg-slate-50/70 transition">
@@ -904,9 +898,18 @@ export default function AdminLedgerPage() {
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                    Date &amp; Time
-                  </label>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                      Date &amp; Time (IST)
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setFormDate(getISTDateTimeLocal())}
+                      className="text-[10px] text-blue-600 hover:text-blue-700 font-bold hover:underline cursor-pointer"
+                    >
+                      Set to Now
+                    </button>
+                  </div>
                   <input
                     type="datetime-local"
                     value={formDate}

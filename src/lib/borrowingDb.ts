@@ -2,6 +2,7 @@ import { getMongoDb } from "./mongodb";
 import { PartnerWallet, BorrowingTransaction, BorrowingType } from "./borrowingTypes";
 import { createTransaction } from "./ledgerDb";
 import { PaymentMode } from "./ledgerTypes";
+import { parseToISTIsoString, getNowISTIsoString } from "./dateUtils";
 
 const WALLETS_COLLECTION = "partner_wallets";
 const TRANSACTIONS_COLLECTION = "borrowing_transactions";
@@ -87,7 +88,7 @@ export async function recordPartnerTransaction(data: {
   const partner = await walletsCol.findOne({ id: data.partnerId });
   const partnerName = partner?.name || data.partnerId;
   const amount = Number(data.amount) || 0;
-  const txDate = data.date || new Date().toISOString();
+  const txDate = data.date ? parseToISTIsoString(data.date) : getNowISTIsoString();
 
   // 2. Sync with Main Wallet Ledger if requested (default true)
   let mainLedgerTxId: string | undefined = undefined;

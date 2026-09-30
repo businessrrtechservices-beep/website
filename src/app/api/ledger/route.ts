@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyAdminRequest } from "@/lib/auth";
 import { getWalletSummary, getTransactions, createTransaction } from "@/lib/ledgerDb";
+import { parseToISTIsoString } from "@/lib/dateUtils";
 
 export async function GET(req: NextRequest) {
   const isAuth = await verifyAdminRequest(req);
@@ -47,7 +48,7 @@ export async function POST(req: NextRequest) {
       category: body.category || "General",
       reason: body.reason,
       referenceNumber: body.referenceNumber || "",
-      date: body.date || new Date().toISOString(),
+      date: parseToISTIsoString(body.date),
       invoiceId: body.invoiceId,
       invoiceNumber: body.invoiceNumber,
       dealerId: body.dealerId,

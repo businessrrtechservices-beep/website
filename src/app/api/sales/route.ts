@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyAdminRequest } from "@/lib/auth";
 import { getInvoices, createInvoice, generateNextInvoiceNumber } from "@/lib/salesDb";
+import { getISTDateString } from "@/lib/dateUtils";
 
 export async function GET(req: NextRequest) {
   const isAuth = await verifyAdminRequest(req);
@@ -62,7 +63,7 @@ export async function POST(req: NextRequest) {
 
     const invoice = await createInvoice({
       invoiceNumber: body.invoiceNumber,
-      date: body.date || new Date().toISOString().substring(0, 10),
+      date: body.date || getISTDateString(),
       dueDate: body.dueDate,
       customer: body.customer,
       items: body.items,

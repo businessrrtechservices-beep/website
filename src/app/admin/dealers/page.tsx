@@ -28,6 +28,7 @@ import {
 import { Dealer, DealerTransaction } from "@/lib/dealerTypes";
 import { PaymentMode } from "@/lib/ledgerTypes";
 import { InventoryCategory } from "@/lib/inventoryTypes";
+import { formatISTDateTime, parseToISTIsoString } from "@/lib/dateUtils";
 
 export default function AdminDealersPage() {
   const [dealers, setDealers] = useState<Dealer[]>([]);
@@ -210,6 +211,7 @@ export default function AdminDealersPage() {
           paymentMode: payMode,
           referenceNumber: payRef.trim(),
           description: payReason || `Payment to dealer: ${selectedDealerForPay.name}`,
+          date: parseToISTIsoString(),
           syncMainLedger: true,
         }),
       });
@@ -581,13 +583,7 @@ export default function AdminDealersPage() {
                     <tbody className="divide-y divide-slate-100 font-medium">
                       {dealerTransactions.map((tx) => {
                         const isCredit = tx.type === "credit_purchase";
-                        const formattedDate = new Date(tx.date).toLocaleString("en-IN", {
-                          day: "2-digit",
-                          month: "short",
-                          year: "numeric",
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        });
+                        const formattedDate = formatISTDateTime(tx.date);
 
                         return (
                           <tr key={tx.id} className="hover:bg-slate-50/70 transition">

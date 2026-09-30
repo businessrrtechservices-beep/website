@@ -1,17 +1,14 @@
 import { getMongoDb } from "./mongodb";
 import { WalletTransaction, WalletSummary } from "./ledgerTypes";
+import { getISTDateString, parseToISTIsoString, getNowISTIsoString } from "./dateUtils";
 
 const COLLECTION_NAME = "wallet_transactions";
 
 function getTodayRange(): { start: string; end: string } {
-  const d = new Date();
-  const year = d.getFullYear();
-  const month = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  const dateStr = `${year}-${month}-${day}`;
+  const dateStr = getISTDateString();
   return {
-    start: `${dateStr}T00:00:00.000Z`,
-    end: `${dateStr}T23:59:59.999Z`,
+    start: dateStr,
+    end: `${dateStr}T23:59:59+05:30`,
   };
 }
 
@@ -139,10 +136,13 @@ export async function createTransaction(
   const db = await getMongoDb();
   const collection = db.collection<any>(COLLECTION_NAME);
 
+  const txDate = data.date ? parseToISTIsoString(data.date) : getNowISTIsoString();
+
   const newTx: WalletTransaction = {
     ...data,
     id: `TX-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
     amount: Number(data.amount) || 0,
+    date: txDate,
     createdAt: new Date(),
   };
 

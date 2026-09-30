@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { verifyAdminRequest } from "@/lib/auth";
 import { getDealerTransactions, recordDealerPayment } from "@/lib/dealersDb";
 import { createTransaction } from "@/lib/ledgerDb";
+import { parseToISTIsoString } from "@/lib/dateUtils";
 
 export async function GET(req: NextRequest) {
   const isAuth = await verifyAdminRequest(req);
@@ -33,7 +34,7 @@ export async function POST(req: NextRequest) {
     }
 
     const amount = Number(body.amount);
-    const date = body.date || new Date().toISOString();
+    const date = parseToISTIsoString(body.date);
 
     // 1. Record dealer payment
     await recordDealerPayment(body.dealerId, amount, {

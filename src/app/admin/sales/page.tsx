@@ -30,6 +30,7 @@ import {
 import { Invoice, SaleItemLine, CustomerInfo } from "@/lib/salesTypes";
 import { InventoryItem } from "@/lib/inventoryTypes";
 import { PaymentMode } from "@/lib/ledgerTypes";
+import { getISTDateString, formatISTDate } from "@/lib/dateUtils";
 
 export default function AdminSalesPage() {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
@@ -51,7 +52,7 @@ export default function AdminSalesPage() {
 
   // New Sale Form
   const [nextInvNum, setNextInvNum] = useState("");
-  const [saleDate, setSaleDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [saleDate, setSaleDate] = useState(() => getISTDateString());
   const [customerName, setCustomerName] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
   const [customerEmail, setCustomerEmail] = useState("");
@@ -130,6 +131,7 @@ export default function AdminSalesPage() {
     setPaymentMode("Cash");
     setAmountPaid("");
     setRecordInLedger(true);
+    setSaleDate(getISTDateString());
     fetchInventory();
     setIsNewSaleOpen(true);
   };
@@ -450,7 +452,7 @@ export default function AdminSalesPage() {
                       </td>
 
                       <td className="py-3.5 px-4 text-slate-600 whitespace-nowrap">
-                        {inv.date}
+                        {formatISTDate(inv.date)}
                       </td>
 
                       <td className="py-3.5 px-4">
@@ -1000,7 +1002,7 @@ export default function AdminSalesPage() {
                     {selectedInvoiceForView.invoiceNumber}
                   </div>
                   <div className="text-xs text-slate-500 mt-1">
-                    Invoice Date: <span className="font-semibold text-slate-800">{selectedInvoiceForView.date}</span>
+                    Invoice Date: <span className="font-semibold text-slate-800">{formatISTDate(selectedInvoiceForView.date)}</span>
                   </div>
                   <div className="mt-1">
                     <span

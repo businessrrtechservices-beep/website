@@ -1,5 +1,6 @@
 import { getMongoDb } from "./mongodb";
 import { Dealer, DealerTransaction } from "./dealerTypes";
+import { parseToISTIsoString, getNowISTIsoString } from "./dateUtils";
 
 const DEALERS_COLLECTION = "dealers";
 const DEALER_TX_COLLECTION = "dealer_transactions";
@@ -114,7 +115,7 @@ export async function recordDealerPurchase(
     dealerName: dealer.name,
     type: "credit_purchase",
     amount,
-    date: details?.date || new Date().toISOString(),
+    date: details?.date ? parseToISTIsoString(details.date) : getNowISTIsoString(),
     description: details?.description || `Stock Purchase on Credit (${details?.itemCode || "Inventory"})`,
     itemId: details?.itemId,
     itemCode: details?.itemCode,
@@ -168,7 +169,7 @@ export async function recordDealerPayment(
     type: "payment",
     amount,
     paymentMode: details?.paymentMode || "Cash",
-    date: details?.date || new Date().toISOString(),
+    date: details?.date ? parseToISTIsoString(details.date) : getNowISTIsoString(),
     description: details?.description || `Debt Payment to ${dealer.name}`,
     referenceNumber: details?.referenceNumber,
     balanceAfter: newBalance,

@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { PartnerWallet, BorrowingTransaction, BorrowingType } from "@/lib/borrowingTypes";
 import { PaymentMode } from "@/lib/ledgerTypes";
+import { getISTDateTimeLocal, formatISTDateTime, parseToISTIsoString } from "@/lib/dateUtils";
 
 export default function AdminBorrowingPage() {
   const [wallets, setWallets] = useState<PartnerWallet[]>([]);
@@ -41,7 +42,7 @@ export default function AdminBorrowingPage() {
   const [modalPaymentMode, setModalPaymentMode] = useState<PaymentMode>("Cash");
   const [modalReason, setModalReason] = useState("");
   const [modalRef, setModalRef] = useState("");
-  const [modalDate, setModalDate] = useState(() => new Date().toISOString().slice(0, 16));
+  const [modalDate, setModalDate] = useState(() => getISTDateTimeLocal());
   const [syncMainLedger, setSyncMainLedger] = useState(true);
 
   // New Partner Modal State
@@ -88,6 +89,7 @@ export default function AdminBorrowingPage() {
     setModalAmount("");
     setModalReason("");
     setModalRef("");
+    setModalDate(getISTDateTimeLocal());
     setSyncMainLedger(true);
     setIsModalOpen(true);
   };
@@ -111,7 +113,7 @@ export default function AdminBorrowingPage() {
           type: modalType,
           amount: parseFloat(modalAmount),
           paymentMode: modalPaymentMode,
-          date: modalDate ? new Date(modalDate).toISOString() : new Date().toISOString(),
+          date: parseToISTIsoString(modalDate),
           reason: modalReason.trim(),
           referenceNumber: modalRef.trim(),
           syncMainLedger,
@@ -124,6 +126,10 @@ export default function AdminBorrowingPage() {
       }
 
       setIsModalOpen(false);
+      setModalAmount("");
+      setModalReason("");
+      setModalRef("");
+      setModalDate(getISTDateTimeLocal());
       await fetchBorrowingData();
     } catch (err: any) {
       setError(err?.message || "Something went wrong");
@@ -447,13 +453,7 @@ export default function AdminBorrowingPage() {
               <tbody className="divide-y divide-slate-100 font-medium">
                 {transactions.map((tx) => {
                   const isBorrow = tx.type === "borrow";
-                  const formattedDate = new Date(tx.date).toLocaleString("en-IN", {
-                    day: "2-digit",
-                    month: "short",
-                    year: "numeric",
-                    hour: "2-digit",
-                    minute: "2-digit",
-                  });
+                  const formattedDate = formatISTDateTime(tx.date);
 
                   return (
                     <tr key={tx.id} className="hover:bg-slate-50/70 transition">
@@ -660,9 +660,18 @@ export default function AdminBorrowingPage() {
               {/* Date & Ref */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                    Date &amp; Time
-                  </label>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                      Date &amp; Time (IST)
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setModalDate(getISTDateTimeLocal())}
+                      className="text-[10px] text-blue-600 hover:text-blue-700 font-bold hover:underline cursor-pointer"
+                    >
+                      Set to Now
+                    </button>
+                  </div>
                   <input
                     type="datetime-local"
                     value={modalDate}

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyAdminRequest } from "@/lib/auth";
 import { getInventoryItems, createInventoryItem } from "@/lib/inventoryDb";
+import { parseToISTIsoString } from "@/lib/dateUtils";
 
 export async function GET(req: NextRequest) {
   const isAuth = await verifyAdminRequest(req);
@@ -95,7 +96,7 @@ export async function POST(req: NextRequest) {
             category: "Stock Purchase",
             reason: `Stock Purchase: ${body.name} x${qty}${body.dealerName ? ` (${body.dealerName})` : ""}`,
             referenceNumber: body.paymentRef || createdItems[0].code,
-            date: new Date().toISOString(),
+            date: parseToISTIsoString(),
             dealerId: body.dealerId,
             dealerName: body.dealerName,
           });
@@ -169,7 +170,7 @@ export async function POST(req: NextRequest) {
           category: "Stock Purchase",
           reason: `Stock Purchase: ${body.name} x${qty}${body.dealerName ? ` (${body.dealerName})` : ""}`,
           referenceNumber: body.paymentRef || item.code,
-          date: new Date().toISOString(),
+          date: parseToISTIsoString(),
           dealerId: body.dealerId,
           dealerName: body.dealerName,
         });
