@@ -20,6 +20,7 @@ import {
   Wallet,
   Boxes,
   Receipt,
+  Handshake,
 } from "lucide-react";
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
@@ -89,6 +90,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const navItems = [
     { label: "Dashboard", href: "/admin", icon: LayoutDashboard },
     { label: "Wallet & Ledger", href: "/admin/ledger", icon: Wallet },
+    { label: "Partner Borrowings", href: "/admin/borrowing", icon: Handshake },
     { label: "Stock & Inventory", href: "/admin/inventory", icon: Boxes },
     { label: "Sales & Invoices", href: "/admin/sales", icon: Receipt },
     { label: "Products Catalog", href: "/admin/products", icon: Laptop },

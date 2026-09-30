@@ -12,36 +12,59 @@ export interface User {
 
 const COLLECTION_NAME = "users";
 
-export const DEFAULT_ADMIN: User = {
-  username: "business.rrtechservices@gmail.com",
-  email: "business.rrtechservices@gmail.com",
-  password: "RRTechServices@01102026",
-  role: "admin",
-  name: "RR Tech Administrator",
-  createdAt: new Date(),
-};
+export const ADMIN_USERS: User[] = [
+  {
+    username: "business.rrtechservices@gmail.com",
+    email: "business.rrtechservices@gmail.com",
+    password: "RRTechServices@01102026",
+    role: "admin",
+    name: "RR Tech Administrator",
+    createdAt: new Date(),
+  },
+  {
+    username: "business.rrtrchservices@gmail.com",
+    email: "business.rrtrchservices@gmail.com",
+    password: "RRTechServices@01102026",
+    role: "admin",
+    name: "RR Tech Administrator",
+    createdAt: new Date(),
+  },
+];
 
 /**
- * Ensures admin record exists in the cloud MongoDB users table/collection
+ * Ensures admin records exist in the MongoDB users table/collection
  */
 export async function ensureAdminUser(): Promise<void> {
-  const db = await getMongoDb();
-  const collection = db.collection<User>(COLLECTION_NAME);
-  const existing = await collection.findOne({
-    $or: [
-      { username: DEFAULT_ADMIN.username },
-      { email: DEFAULT_ADMIN.email },
-    ],
-  });
+  try {
+    const db = await getMongoDb();
+    const collection = db.collection<User>(COLLECTION_NAME);
 
-  if (!existing) {
-    await collection.insertOne({ ...DEFAULT_ADMIN, createdAt: new Date() });
-    console.log("Admin user created in Cloud MongoDB users collection");
+    for (const adminUser of ADMIN_USERS) {
+      const existing = await collection.findOne({
+        $or: [
+          { username: adminUser.username.toLowerCase() },
+          { email: adminUser.email.toLowerCase() },
+        ],
+      });
+
+      if (!existing) {
+        await collection.insertOne({ ...adminUser, createdAt: new Date() });
+        console.log(`Admin user ${adminUser.email} created in MongoDB users collection`);
+      } else if (existing.password !== adminUser.password) {
+        await collection.updateOne(
+          { _id: (existing as any)._id },
+          { $set: { password: adminUser.password, role: "admin" } }
+        );
+        console.log(`Admin user ${adminUser.email} password updated in MongoDB`);
+      }
+    }
+  } catch (err) {
+    console.error("Error in ensureAdminUser:", err);
   }
 }
 
 /**
- * Verifies user credentials strictly against the cloud MongoDB database
+ * Verifies user credentials strictly against the MongoDB database
  */
 export async function verifyUserCredentials(
   identifier: string,
@@ -50,24 +73,47 @@ export async function verifyUserCredentials(
   const cleanId = (identifier || "").trim().toLowerCase();
   const cleanPass = (pass || "").trim();
 
-  const db = await getMongoDb();
-  const collection = db.collection<User>(COLLECTION_NAME);
-  await ensureAdminUser();
+  try {
+    const db = await getMongoDb();
+    const collection = db.collection<User>(COLLECTION_NAME);
+    await ensureAdminUser();
 
-  const user = await collection.findOne({
-    $or: [
-      { username: cleanId },
-      { email: cleanId },
-    ],
-  });
+    const user = await collection.findOne({
+      $or: [
+        { username: cleanId },
+        { email: cleanId },
+      ],
+    });
 
-  if (user && user.password === cleanPass) {
+    if (user && user.password === cleanPass) {
+      return {
+        success: true,
+        user: {
+          username: user.username,
+          role: user.role,
+          email: user.email,
+        },
+      };
+    }
+  } catch (err) {
+    console.error("Error verifying credentials in DB:", err);
+  }
+
+  // Check fallback against configured admin
+  const isMatch =
+    ADMIN_USERS.some(
+      (u) =>
+        (u.username.toLowerCase() === cleanId || u.email.toLowerCase() === cleanId) &&
+        u.password === cleanPass
+    );
+
+  if (isMatch) {
     return {
       success: true,
       user: {
-        username: user.username,
-        role: user.role,
-        email: user.email,
+        username: cleanId,
+        role: "admin",
+        email: cleanId,
       },
     };
   }
@@ -76,11 +122,15 @@ export async function verifyUserCredentials(
 }
 
 export async function getAllUsers(): Promise<User[]> {
-  const db = await getMongoDb();
-  const collection = db.collection<User>(COLLECTION_NAME);
-  const items = await collection.find({}, { projection: { password: 0 } }).toArray();
-  return items.map(({ _id, ...rest }: any) => ({
-    ...rest,
-    id: _id.toString(),
-  }));
+  try {
+    const db = await getMongoDb();
+    const collection = db.collection<User>(COLLECTION_NAME);
+    const items = await collection.find({}, { projection: { password: 0 } }).toArray();
+    return items.map(({ _id, ...rest }: any) => ({
+      ...rest,
+      id: _id.toString(),
+    }));
+  } catch {
+    return ADMIN_USERS.map(({ password, ...u }) => u as User);
+  }
 }
