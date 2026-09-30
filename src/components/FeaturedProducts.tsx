@@ -43,16 +43,25 @@ export default async function FeaturedProducts() {
           </a>
         </div>
 
-        <div className="grid gap-3 sm:gap-3.5 lg:gap-4 grid-cols-2 lg:grid-cols-4">
-          {featured.map((product, idx) => (
-            <div
-              key={product.id}
-              className="transition-transform duration-300 hover:-translate-y-1"
-            >
-              <ProductCard product={product} priority={idx < 2} />
-            </div>
-          ))}
-        </div>
+        {featured.length === 0 ? (
+          <div className="text-center py-12 px-4 rounded-2xl border border-dashed border-slate-200 bg-slate-50/50">
+            <p className="text-sm font-bold text-slate-700">New inventory being updated</p>
+            <p className="text-xs text-slate-400 mt-1">
+              Add products in the Admin Panel to display them in this featured collection.
+            </p>
+          </div>
+        ) : (
+          <div className="grid gap-3 sm:gap-3.5 lg:gap-4 grid-cols-2 lg:grid-cols-4">
+            {featured.map((product, idx) => (
+              <div
+                key={product.id}
+                className="transition-transform duration-300 hover:-translate-y-1"
+              >
+                <ProductCard product={product} priority={idx < 2} />
+              </div>
+            ))}
+          </div>
+        )}
 
         <div className="mt-5 sm:hidden text-center">
           <a

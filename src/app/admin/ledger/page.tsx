@@ -55,10 +55,27 @@ export default function AdminLedgerPage() {
 
   // Partner Borrowing / Repayment Flag
   const [isPartnerBorrowing, setIsPartnerBorrowing] = useState(false);
-  const [selectedPartner, setSelectedPartner] = useState<"nauman" | "dinesh" | "subhan">("nauman");
+  const [partnerWallets, setPartnerWallets] = useState<{ id: string; name: string }[]>([]);
+  const [selectedPartnerId, setSelectedPartnerId] = useState("");
 
   // Dealer link
   const [selectedDealerId, setSelectedDealerId] = useState("");
+
+  const fetchPartnerWallets = async () => {
+    try {
+      const res = await fetch("/api/borrowing");
+      if (res.ok) {
+        const data = await res.json();
+        const list = data.wallets || [];
+        setPartnerWallets(list);
+        if (list.length > 0 && !selectedPartnerId) {
+          setSelectedPartnerId(list[0].id);
+        }
+      }
+    } catch (err) {
+      console.error("Failed to load partner wallets:", err);
+    }
+  };
 
   const fetchDealers = async () => {
     try {
@@ -95,6 +112,7 @@ export default function AdminLedgerPage() {
   useEffect(() => {
     fetchLedger();
     fetchDealers();
+    fetchPartnerWallets();
   }, [filterType]);
 
   const handleSearchSubmit = (e: React.FormEvent) => {
@@ -118,17 +136,23 @@ export default function AdminLedgerPage() {
 
     try {
       if (isPartnerBorrowing) {
+        if (!selectedPartnerId) {
+          throw new Error("Please select a partner wallet or create one in the Borrowing tab");
+        }
+        const pObj = partnerWallets.find((p) => p.id === selectedPartnerId);
+        const pName = pObj?.name || selectedPartnerId;
+
         // Record borrowing / repayment transaction (syncs partner wallet + main wallet)
         const res = await fetch("/api/borrowing", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            partnerId: selectedPartner,
+            partnerId: selectedPartnerId,
             type: formType === "credit" ? "borrow" : "repayment",
             amount: parseFloat(formAmount),
             paymentMode: formPaymentMode,
             date: formDate ? new Date(formDate).toISOString() : new Date().toISOString(),
-            reason: formReason.trim(),
+            reason: formReason.trim() || (formType === "credit" ? `Borrowed from ${pName}` : `Repaid to ${pName}`),
             referenceNumber: formRef.trim(),
             syncMainLedger: true,
           }),
@@ -603,11 +627,15 @@ export default function AdminLedgerPage() {
                         if (checked) {
                           setSelectedDealerId("");
                           setFormCategory(formType === "credit" ? "Partner Borrowing" : "Partner Repayment");
-                          setFormReason(
-                            formType === "credit"
-                              ? `Borrowed from ${selectedPartner.charAt(0).toUpperCase() + selectedPartner.slice(1)}`
-                              : `Repaid to ${selectedPartner.charAt(0).toUpperCase() + selectedPartner.slice(1)}`
-                          );
+                          const curP = partnerWallets.find((p) => p.id === selectedPartnerId) || partnerWallets[0];
+                          if (curP) {
+                            setSelectedPartnerId(curP.id);
+                            setFormReason(
+                              formType === "credit"
+                                ? `Borrowed from ${curP.name}`
+                                : `Repaid to ${curP.name}`
+                            );
+                          }
                         }
                       }}
                       className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 border-slate-300"
@@ -616,44 +644,49 @@ export default function AdminLedgerPage() {
                       Is this a Partner Borrowing or Repayment?
                     </label>
                   </div>
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-blue-700 bg-white px-2 py-0.5 rounded border border-blue-200">
-                    Nauman &bull; Dinesh &bull; Subhan
-                  </span>
                 </div>
 
                 {isPartnerBorrowing && (
                   <div className="pt-2 border-t border-blue-200/70 space-y-2">
-                    <label className="block text-[11px] font-bold text-slate-700">
-                      Select Partner:
-                    </label>
-                    <div className="grid grid-cols-3 gap-2">
-                      {(["nauman", "dinesh", "subhan"] as const).map((p) => (
-                        <button
-                          key={p}
-                          type="button"
-                          onClick={() => {
-                            setSelectedPartner(p);
-                            setFormReason(
-                              formType === "credit"
-                                ? `Borrowed from ${p.charAt(0).toUpperCase() + p.slice(1)}`
-                                : `Repaid to ${p.charAt(0).toUpperCase() + p.slice(1)}`
-                            );
-                          }}
-                          className={`py-1.5 px-2 rounded-lg text-xs font-bold capitalize transition cursor-pointer ${
-                            selectedPartner === p
-                              ? "bg-blue-600 text-white shadow-2xs"
-                              : "bg-white text-slate-700 border border-slate-200 hover:bg-slate-100"
-                          }`}
-                        >
-                          {p}
-                        </button>
-                      ))}
-                    </div>
-                    <p className="text-[10.5px] text-slate-600">
-                      {formType === "credit"
-                        ? `Main wallet receives +₹${formAmount || "0"} & ${selectedPartner.toUpperCase()} wallet gets +₹${formAmount || "0"} borrowed.`
-                        : `Main wallet deducts -₹${formAmount || "0"} & ${selectedPartner.toUpperCase()} borrowed balance decreases towards ₹0.`}
-                    </p>
+                    {partnerWallets.length === 0 ? (
+                      <p className="text-xs text-amber-800 bg-amber-50 p-2.5 rounded-lg border border-amber-200">
+                        No partner accounts added yet. Please add a partner in the &ldquo;Borrowing&rdquo; section first.
+                      </p>
+                    ) : (
+                      <>
+                        <label className="block text-[11px] font-bold text-slate-700">
+                          Select Partner:
+                        </label>
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                          {partnerWallets.map((p) => (
+                            <button
+                              key={p.id}
+                              type="button"
+                              onClick={() => {
+                                setSelectedPartnerId(p.id);
+                                setFormReason(
+                                  formType === "credit"
+                                    ? `Borrowed from ${p.name}`
+                                    : `Repaid to ${p.name}`
+                                );
+                              }}
+                              className={`py-1.5 px-2 rounded-lg text-xs font-bold capitalize transition cursor-pointer truncate ${
+                                selectedPartnerId === p.id
+                                  ? "bg-blue-600 text-white shadow-2xs"
+                                  : "bg-white text-slate-700 border border-slate-200 hover:bg-slate-100"
+                              }`}
+                            >
+                              {p.name}
+                            </button>
+                          ))}
+                        </div>
+                        <p className="text-[10.5px] text-slate-600">
+                          {formType === "credit"
+                            ? `Main wallet receives +₹${formAmount || "0"} & partner borrowed balance increases.`
+                            : `Main wallet deducts -₹${formAmount || "0"} & partner borrowed balance decreases towards ₹0.`}
+                        </p>
+                      </>
+                    )}
                   </div>
                 )}
               </div>

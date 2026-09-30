@@ -6,35 +6,13 @@ import { PaymentMode } from "./ledgerTypes";
 const WALLETS_COLLECTION = "partner_wallets";
 const TRANSACTIONS_COLLECTION = "borrowing_transactions";
 
-export const INITIAL_PARTNERS: Array<{ id: string; name: string }> = [
-  { id: "nauman", name: "Nauman" },
-  { id: "dinesh", name: "Dinesh" },
-  { id: "subhan", name: "Subhan" },
-];
-
 /**
- * Initializes or fetches the 3 partner wallets (Nauman, Dinesh, Subhan) strictly from Cloud MongoDB
+ * Fetches all partner wallets strictly from Cloud MongoDB (no hardcoded partners)
  */
 export async function getPartnerWallets(): Promise<PartnerWallet[]> {
   try {
     const db = await getMongoDb();
     const collection = db.collection<any>(WALLETS_COLLECTION);
-
-    // Ensure all 3 initial partners exist
-    for (const p of INITIAL_PARTNERS) {
-      const exists = await collection.findOne({ id: p.id });
-      if (!exists) {
-        await collection.insertOne({
-          id: p.id,
-          name: p.name,
-          currentBorrowedBalance: 0,
-          totalBorrowed: 0,
-          totalRepaid: 0,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        });
-      }
-    }
 
     const items = await collection.find({}).sort({ createdAt: 1 }).toArray();
     return items.map(({ _id, ...rest }) => ({
@@ -46,16 +24,40 @@ export async function getPartnerWallets(): Promise<PartnerWallet[]> {
     }));
   } catch (error) {
     console.error("Error fetching partner wallets from Cloud MongoDB:", error);
-    return INITIAL_PARTNERS.map((p) => ({
-      id: p.id,
-      name: p.name,
-      currentBorrowedBalance: 0,
-      totalBorrowed: 0,
-      totalRepaid: 0,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    }));
+    return [];
   }
+}
+
+export async function createPartnerWallet(data: {
+  name: string;
+  phone?: string;
+  notes?: string;
+}): Promise<PartnerWallet> {
+  const db = await getMongoDb();
+  const collection = db.collection<any>(WALLETS_COLLECTION);
+
+  const cleanId = data.name.toLowerCase().replace(/[^a-z0-9]/g, "-").trim() || `partner-${Date.now()}`;
+  const newWallet: PartnerWallet = {
+    id: cleanId,
+    name: data.name.trim(),
+    phone: data.phone?.trim(),
+    notes: data.notes?.trim(),
+    currentBorrowedBalance: 0,
+    totalBorrowed: 0,
+    totalRepaid: 0,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  };
+
+  await collection.insertOne(newWallet as any);
+  return newWallet;
+}
+
+export async function deletePartnerWallet(id: string): Promise<boolean> {
+  const db = await getMongoDb();
+  const collection = db.collection<any>(WALLETS_COLLECTION);
+  const result = await collection.deleteOne({ $or: [{ id }, { _id: id } as any] });
+  return result.deletedCount > 0;
 }
 
 /**

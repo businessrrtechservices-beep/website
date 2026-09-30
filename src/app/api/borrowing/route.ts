@@ -54,6 +54,17 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
 
+    if (body.action === "create_partner" || (body.name && !body.type)) {
+      const { createPartnerWallet } = await import("@/lib/borrowingDb");
+      const partner = await createPartnerWallet({
+        name: (body.name || body.partnerName).trim(),
+        phone: body.phone,
+        notes: body.notes,
+      });
+      const wallets = await getPartnerWallets();
+      return NextResponse.json({ partner, wallets }, { status: 201 });
+    }
+
     if (!body.partnerId || !body.type || !body.amount) {
       return NextResponse.json(
         { error: "Partner ID, type (borrow/repayment), and amount are required" },

@@ -35,7 +35,7 @@ export default function AdminBorrowingPage() {
 
   // Transaction Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [modalPartnerId, setModalPartnerId] = useState("nauman");
+  const [modalPartnerId, setModalPartnerId] = useState("");
   const [modalType, setModalType] = useState<BorrowingType>("borrow");
   const [modalAmount, setModalAmount] = useState("");
   const [modalPaymentMode, setModalPaymentMode] = useState<PaymentMode>("Cash");
@@ -43,6 +43,14 @@ export default function AdminBorrowingPage() {
   const [modalRef, setModalRef] = useState("");
   const [modalDate, setModalDate] = useState(() => new Date().toISOString().slice(0, 16));
   const [syncMainLedger, setSyncMainLedger] = useState(true);
+
+  // New Partner Modal State
+  const [isAddPartnerOpen, setIsAddPartnerOpen] = useState(false);
+  const [newPartnerName, setNewPartnerName] = useState("");
+  const [newPartnerPhone, setNewPartnerPhone] = useState("");
+  const [newPartnerNotes, setNewPartnerNotes] = useState("");
+  const [partnerSubmitting, setPartnerSubmitting] = useState(false);
+  const [partnerError, setPartnerError] = useState<string | null>(null);
 
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -138,6 +146,53 @@ export default function AdminBorrowingPage() {
     }
   };
 
+  const handleCreatePartner = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newPartnerName.trim()) {
+      setPartnerError("Partner name is required");
+      return;
+    }
+    setPartnerSubmitting(true);
+    setPartnerError(null);
+    try {
+      const res = await fetch("/api/borrowing", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "create_partner",
+          name: newPartnerName.trim(),
+          phone: newPartnerPhone.trim(),
+          notes: newPartnerNotes.trim(),
+        }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "Failed to create partner wallet");
+      }
+      setIsAddPartnerOpen(false);
+      setNewPartnerName("");
+      setNewPartnerPhone("");
+      setNewPartnerNotes("");
+      await fetchBorrowingData();
+    } catch (err: any) {
+      setPartnerError(err.message || "Failed to create partner");
+    } finally {
+      setPartnerSubmitting(false);
+    }
+  };
+
+  const handleDeletePartner = async (id: string, name: string) => {
+    if (!confirm(`Are you sure you want to remove partner account for "${name}"?`)) return;
+    try {
+      const res = await fetch(`/api/borrowing/${id}`, { method: "DELETE" });
+      if (res.ok) {
+        await fetchBorrowingData();
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
   return (
     <div className="p-4 sm:p-6 lg:p-8 space-y-6">
       {/* Top Header */}
@@ -163,17 +218,49 @@ export default function AdminBorrowingPage() {
           </button>
 
           <button
-            onClick={() => handleOpenActionModal("nauman", "borrow")}
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-xs sm:text-sm font-bold text-white transition shadow-sm cursor-pointer"
+            onClick={() => {
+              setPartnerError(null);
+              setIsAddPartnerOpen(true);
+            }}
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white border border-slate-200 hover:bg-slate-50 text-xs font-bold text-slate-700 transition shadow-2xs cursor-pointer"
           >
-            <Plus className="w-4 h-4" />
-            <span>Record Borrow / Repay</span>
+            <Plus className="w-4 h-4 text-blue-600" />
+            <span>Add Partner Wallet</span>
           </button>
+
+          {wallets.length > 0 && (
+            <button
+              onClick={() => handleOpenActionModal(wallets[0].id, "borrow")}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-xs sm:text-sm font-bold text-white transition shadow-sm cursor-pointer"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Record Borrow / Repay</span>
+            </button>
+          )}
         </div>
       </div>
 
-      {/* 3 Partner Wallet Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+      {/* Partner Wallet Cards */}
+      {wallets.length === 0 ? (
+        <div className="p-8 text-center rounded-2xl bg-white border border-dashed border-slate-200 space-y-3">
+          <Users className="w-10 h-10 mx-auto text-slate-300" />
+          <h3 className="text-base font-bold text-slate-800">No partner accounts added yet</h3>
+          <p className="text-xs text-slate-500 max-w-sm mx-auto">
+            Click &ldquo;Add Partner Wallet&rdquo; above to manually add partners (e.g. Nauman, Dinesh, Subhan).
+          </p>
+          <button
+            onClick={() => {
+              setPartnerError(null);
+              setIsAddPartnerOpen(true);
+            }}
+            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-xs font-bold text-white transition cursor-pointer"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Add First Partner</span>
+          </button>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
         {wallets.map((wallet) => {
           const isOwed = wallet.currentBorrowedBalance > 0;
 
@@ -265,6 +352,7 @@ export default function AdminBorrowingPage() {
           );
         })}
       </div>
+      )}
 
       {/* Aggregate Debt / Total Liabilities Banner */}
       <div className="p-5 rounded-2xl bg-gradient-to-r from-blue-900 to-indigo-900 text-white shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -654,6 +742,96 @@ export default function AdminBorrowingPage() {
                   ) : (
                     <span>Record {modalType === "borrow" ? "Borrowing" : "Repayment"}</span>
                   )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Add Partner Wallet Modal */}
+      {isAddPartnerOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-xl max-w-md w-full overflow-hidden animate-slide-down">
+            <div className="flex items-center justify-between p-4 sm:p-5 border-b border-slate-100">
+              <div className="flex items-center gap-2">
+                <div className="p-2 rounded-xl bg-blue-50 text-blue-600">
+                  <Users className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-slate-900">Add Partner / Borrower</h3>
+                  <p className="text-xs text-slate-500 font-medium">Create a new partner wallet</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsAddPartnerOpen(false)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreatePartner} className="p-4 sm:p-6 space-y-4">
+              {partnerError && (
+                <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-semibold">
+                  {partnerError}
+                </div>
+              )}
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                  Partner / Borrower Name *
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Nauman, Dinesh, or Subhan"
+                  value={newPartnerName}
+                  onChange={(e) => setNewPartnerName(e.target.value)}
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-600"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                  Phone Number (Optional)
+                </label>
+                <input
+                  type="text"
+                  placeholder="+91 98XXXXXXXX"
+                  value={newPartnerPhone}
+                  onChange={(e) => setNewPartnerPhone(e.target.value)}
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-600"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                  Notes / Relationship (Optional)
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. Partner, Angel Investor, Co-founder"
+                  value={newPartnerNotes}
+                  onChange={(e) => setNewPartnerNotes(e.target.value)}
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-600"
+                />
+              </div>
+
+              <div className="pt-2 flex items-center justify-end gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => setIsAddPartnerOpen(false)}
+                  className="px-4 py-2 rounded-xl border border-slate-200 text-xs font-bold text-slate-600 hover:bg-slate-50 transition cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={partnerSubmitting}
+                  className="px-5 py-2 rounded-xl text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 transition shadow-sm cursor-pointer disabled:opacity-60"
+                >
+                  {partnerSubmitting ? "Creating..." : "Create Partner Wallet"}
                 </button>
               </div>
             </form>

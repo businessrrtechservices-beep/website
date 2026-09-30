@@ -3,47 +3,10 @@ import { Dealer } from "./dealerTypes";
 
 const COLLECTION_NAME = "dealers";
 
-const DEFAULT_DEALERS: Omit<Dealer, "createdAt" | "updatedAt">[] = [
-  {
-    id: "dealer-1",
-    name: "Apex Tech Wholesale",
-    contactPerson: "Mahesh Sharma",
-    phone: "+91 9822019283",
-    email: "sales@apextechwholesale.com",
-    address: "Sadashiv Peth, Electronic Market, Pune - 411030",
-    categories: ["Laptops", "Desktops & Monitors"],
-    totalPurchased: 0,
-    totalPaid: 0,
-    outstandingBalance: 0,
-    notes: "Primary supplier for refurbished Dell and ThinkPad laptops",
-  },
-  {
-    id: "dealer-2",
-    name: "Star Micro Computer Spares",
-    contactPerson: "Sunil Joshi",
-    phone: "+91 9890123456",
-    email: "starspares.pune@gmail.com",
-    address: "FC Road, Deccan, Pune - 411004",
-    categories: ["Accessories", "Storage & RAM", "Chargers & Batteries"],
-    totalPurchased: 0,
-    totalPaid: 0,
-    outstandingBalance: 0,
-    notes: "Supplier for Logitech accessories, Crucial RAM & NVMe SSDs",
-  },
-];
-
 export async function getDealers(): Promise<Dealer[]> {
   try {
     const db = await getMongoDb();
     const collection = db.collection<any>(COLLECTION_NAME);
-
-    const count = await collection.countDocuments();
-    if (count === 0) {
-      const now = new Date();
-      await collection.insertMany(
-        DEFAULT_DEALERS.map((d) => ({ ...d, createdAt: now, updatedAt: now })) as any
-      );
-    }
 
     const items = await collection.find({}).sort({ updatedAt: -1, createdAt: -1 }).toArray();
     return items.map(({ _id, ...rest }) => ({
@@ -55,11 +18,7 @@ export async function getDealers(): Promise<Dealer[]> {
     }));
   } catch (error) {
     console.error("Error fetching dealers from Cloud MongoDB:", error);
-    return DEFAULT_DEALERS.map((d) => ({
-      ...d,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    }));
+    return [];
   }
 }
 

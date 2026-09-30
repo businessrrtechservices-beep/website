@@ -6,6 +6,7 @@ export interface PartnerWallet {
   id: string; // e.g. "nauman", "dinesh", "subhan"
   name: string; // "Nauman", "Dinesh", "Subhan"
   phone?: string;
+  notes?: string;
   currentBorrowedBalance: number; // Amount shop currently owes to partner (totalBorrowed - totalRepaid)
   totalBorrowed: number;
   totalRepaid: number;

@@ -4,59 +4,22 @@ import { InventoryCategory, InventoryItem, StockAllocationRecord } from "./inven
 const ITEMS_COLLECTION = "inventory_items";
 const CATEGORIES_COLLECTION = "inventory_categories";
 
-const DEFAULT_CATEGORIES: InventoryCategory[] = [
-  {
-    id: "laptops",
-    name: "Laptops",
-    subcategories: ["Business Laptops", "Apple MacBooks", "Gaming Laptops", "Ultrabooks", "Student Laptops"],
-  },
-  {
-    id: "desktops",
-    name: "Desktops & Monitors",
-    subcategories: ["Custom Gaming PCs", "All-in-One PCs", "Office Desktops", "Monitors & Displays"],
-  },
-  {
-    id: "accessories",
-    name: "Accessories",
-    subcategories: ["Wireless Mouse", "Wired Mouse", "Keyboards", "Laptop Bags & Sleeves", "USB Hubs & Docks", "Headphones"],
-  },
-  {
-    id: "storage-ram",
-    name: "Storage & RAM",
-    subcategories: ["NVMe M.2 SSD", "SATA 2.5 SSD", "Laptop DDR4 RAM", "Laptop DDR5 RAM", "Desktop RAM"],
-  },
-  {
-    id: "chargers-batteries",
-    name: "Chargers & Batteries",
-    subcategories: ["Type-C 65W/100W Chargers", "Dell/HP Pin Adapters", "Apple MagSafe Chargers", "OEM Laptop Batteries"],
-  },
-  {
-    id: "spares-components",
-    name: "Screens & Repair Spares",
-    subcategories: ["Laptop Screens (FHD/4K)", "Motherboards & ICs", "Keyboards & Palmrests", "Cooling Fans & Thermal Paste"],
-  },
-];
-
 /**
- * Get or seed default computer shop categories in Cloud MongoDB
+ * Get categories strictly from Cloud MongoDB (no hardcoded defaults)
  */
 export async function getCategories(): Promise<InventoryCategory[]> {
   try {
     const db = await getMongoDb();
     const collection = db.collection<InventoryCategory>(CATEGORIES_COLLECTION);
-    const count = await collection.countDocuments();
-    if (count === 0) {
-      await collection.insertMany(DEFAULT_CATEGORIES as any);
-      return DEFAULT_CATEGORIES;
-    }
     const items = await collection.find({}).toArray();
     return items.map(({ _id, ...rest }: any) => ({
       ...rest,
       id: rest.id || _id.toString(),
+      subcategories: rest.subcategories || [],
     }));
   } catch (error) {
     console.error("Error fetching categories from Cloud MongoDB:", error);
-    return DEFAULT_CATEGORIES;
+    return [];
   }
 }
 

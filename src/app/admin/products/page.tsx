@@ -17,7 +17,7 @@ import {
   Loader2,
   IndianRupee,
 } from "lucide-react";
-import { Product } from "@/lib/products";
+import { Product } from "@/lib/productTypes";
 
 export default function AdminProductsPage() {
   const [products, setProducts] = useState<Product[]>([]);
@@ -27,27 +27,25 @@ export default function AdminProductsPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const [seedLoading, setSeedLoading] = useState(false);
-  const [seedMessage, setSeedMessage] = useState<string | null>(null);
   const [uploadingImage, setUploadingImage] = useState(false);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
 
   // Form State
   const [formName, setFormName] = useState("");
-  const [formBrand, setFormBrand] = useState<Product["brand"]>("Dell");
+  const [formBrand, setFormBrand] = useState("");
   const [formModel, setFormModel] = useState("");
   const [formPrice, setFormPrice] = useState("");
   const [formMrp, setFormMrp] = useState("");
-  const [formCondition, setFormCondition] = useState<Product["condition"]>("Excellent");
-  const [formBadge, setFormBadge] = useState<Product["badge"]>("Best Seller");
+  const [formCondition, setFormCondition] = useState("Refurbished A-Grade");
+  const [formBadge, setFormBadge] = useState("");
   const [formWarranty, setFormWarranty] = useState("6");
   const [formImage, setFormImage] = useState("");
-  const [formCpu, setFormCpu] = useState("Intel Core i5");
-  const [formRam, setFormRam] = useState("16 GB DDR4");
-  const [formStorage, setFormStorage] = useState("512 GB SSD");
-  const [formScreen, setFormScreen] = useState("14\" FHD IPS");
+  const [formCpu, setFormCpu] = useState("");
+  const [formRam, setFormRam] = useState("");
+  const [formStorage, setFormStorage] = useState("");
+  const [formScreen, setFormScreen] = useState("");
   const [formGpu, setFormGpu] = useState("");
-  const [formFeatures, setFormFeatures] = useState("Tested Battery, Original Charger, Fast SSD, Warranty Included");
+  const [formFeatures, setFormFeatures] = useState("");
 
   const fetchProducts = async () => {
     setLoading(true);
@@ -71,20 +69,20 @@ export default function AdminProductsPage() {
   const openAddModal = () => {
     setEditingProduct(null);
     setFormName("");
-    setFormBrand("Dell");
+    setFormBrand("");
     setFormModel("");
     setFormPrice("");
     setFormMrp("");
-    setFormCondition("Excellent");
-    setFormBadge("Top Pick");
+    setFormCondition("Refurbished A-Grade");
+    setFormBadge("");
     setFormWarranty("6");
-    setFormImage("/images/laptop-macbook-desk.jpg");
-    setFormCpu("Intel Core i5");
-    setFormRam("16 GB DDR4");
-    setFormStorage("512 GB SSD");
-    setFormScreen("14\" FHD IPS");
+    setFormImage("");
+    setFormCpu("");
+    setFormRam("");
+    setFormStorage("");
+    setFormScreen("");
     setFormGpu("");
-    setFormFeatures("Tested Battery, Original Charger, Fast SSD, Warranty Included");
+    setFormFeatures("");
     setModalOpen(true);
   };
 
@@ -201,30 +199,7 @@ export default function AdminProductsPage() {
     }
   };
 
-  const handleSeedDefaults = async () => {
-    if (!confirm("Feed and sync default products from products.ts into MongoDB?")) return;
-    setSeedLoading(true);
-    setSeedMessage(null);
-    try {
-      const res = await fetch("/api/products/seed", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ force: false }),
-      });
-      const data = await res.json();
-      if (res.ok) {
-        setSeedMessage(`Done: ${data.message}`);
-        await fetchProducts();
-      } else {
-        alert(data.error || "Failed to seed products");
-      }
-    } catch (err: any) {
-      alert(err?.message || "Error seeding products");
-    } finally {
-      setSeedLoading(false);
-      setTimeout(() => setSeedMessage(null), 4000);
-    }
-  };
+  const dynamicBrands = ["All", ...Array.from(new Set(products.map((p) => p.brand).filter(Boolean)))];
 
   const filteredProducts = products.filter((p) => {
     const matchesSearch =
@@ -253,16 +228,6 @@ export default function AdminProductsPage() {
 
         <div className="flex flex-wrap items-center gap-2.5">
           <button
-            onClick={handleSeedDefaults}
-            disabled={seedLoading}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-white border border-slate-200 hover:bg-slate-50 text-xs font-semibold text-slate-700 transition shadow-2xs cursor-pointer disabled:opacity-50"
-            title="Populate or sync products from products.ts into MongoDB"
-          >
-            <Sparkles className={`w-3.5 h-3.5 text-amber-500 ${seedLoading ? "animate-spin" : ""}`} />
-            <span>Seed Default Products</span>
-          </button>
-
-          <button
             onClick={openAddModal}
             className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-xs font-bold text-white transition shadow-xs cursor-pointer"
           >
@@ -271,13 +236,6 @@ export default function AdminProductsPage() {
           </button>
         </div>
       </div>
-
-      {seedMessage && (
-        <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-medium flex items-center gap-2">
-          <Check className="w-4 h-4 text-emerald-600 shrink-0" />
-          <span>{seedMessage}</span>
-        </div>
-      )}
 
       {/* Filters and Search Bar */}
       <div className="flex flex-col sm:flex-row gap-3">
@@ -294,7 +252,7 @@ export default function AdminProductsPage() {
 
         <div className="no-scrollbar flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0">
           <Filter className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-          {["All", "Dell", "HP", "Lenovo", "Apple", "Asus"].map((brand) => (
+          {dynamicBrands.map((brand) => (
             <button
               key={brand}
               onClick={() => setSelectedBrand(brand)}
@@ -491,32 +449,41 @@ export default function AdminProductsPage() {
 
                 <div>
                   <label className="block text-slate-700 font-bold mb-1">Brand</label>
-                  <select
+                  <input
+                    type="text"
+                    required
+                    list="brand-datalist"
                     value={formBrand}
-                    onChange={(e) => setFormBrand(e.target.value as any)}
+                    onChange={(e) => setFormBrand(e.target.value)}
+                    placeholder="e.g. Dell, HP, Apple, Lenovo..."
                     className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-slate-900 focus:bg-white focus:ring-2 focus:ring-blue-600 outline-none"
-                  >
-                    {["Dell", "HP", "Lenovo", "Apple", "Acer", "Asus", "Microsoft"].map((b) => (
-                      <option key={b} value={b}>
-                        {b}
-                      </option>
+                  />
+                  <datalist id="brand-datalist">
+                    {Array.from(new Set(products.map((p) => p.brand).filter(Boolean))).map((b) => (
+                      <option key={b} value={b} />
                     ))}
-                  </select>
+                  </datalist>
                 </div>
 
                 <div>
                   <label className="block text-slate-700 font-bold mb-1">Condition</label>
-                  <select
+                  <input
+                    type="text"
+                    required
+                    list="condition-datalist"
                     value={formCondition}
-                    onChange={(e) => setFormCondition(e.target.value as any)}
+                    onChange={(e) => setFormCondition(e.target.value)}
+                    placeholder="e.g. Refurbished A-Grade, Like New"
                     className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-slate-900 focus:bg-white focus:ring-2 focus:ring-blue-600 outline-none"
-                  >
-                    {["Like New", "Excellent", "Very Good", "Good"].map((c) => (
-                      <option key={c} value={c}>
-                        {c}
-                      </option>
-                    ))}
-                  </select>
+                  />
+                  <datalist id="condition-datalist">
+                    <option value="Refurbished A-Grade" />
+                    <option value="Refurbished B-Grade" />
+                    <option value="Like New" />
+                    <option value="Excellent" />
+                    <option value="Good" />
+                    <option value="Brand New" />
+                  </datalist>
                 </div>
 
                 <div>

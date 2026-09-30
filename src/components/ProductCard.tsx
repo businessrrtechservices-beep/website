@@ -3,7 +3,7 @@
 import Image from "next/image";
 import { Star, ShieldCheck, MessageCircle, ArrowRight } from "lucide-react";
 import { useEffect } from "react";
-import { Product, formatPrice } from "@/lib/products";
+import { Product, formatPrice } from "@/lib/productTypes";
 import { trackInterest, trackSectionView } from "@/lib/analyticsClient";
 
 interface ProductCardProps {

@@ -63,6 +63,11 @@ export default function AdminInventoryPage() {
   const [newSubcategoryName, setNewSubcategoryName] = useState("");
   const [targetCategoryForSub, setTargetCategoryForSub] = useState("");
 
+  // Category modal state
+  const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState("");
+  const [newCategorySubs, setNewCategorySubs] = useState("");
+
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -215,6 +220,36 @@ export default function AdminInventoryPage() {
     }
   };
 
+  const handleAddCategory = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newCategoryName.trim()) return;
+
+    try {
+      const subs = newCategorySubs
+        .split(/[\n,]+/)
+        .map((s) => s.trim())
+        .filter(Boolean);
+
+      const res = await fetch("/api/inventory/categories", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: newCategoryName.trim(),
+          subcategories: subs,
+        }),
+      });
+
+      if (res.ok) {
+        setIsCategoryModalOpen(false);
+        setNewCategoryName("");
+        setNewCategorySubs("");
+        await fetchCategories();
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
   const handleAddSubcategory = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newSubcategoryName.trim() || !targetCategoryForSub) return;
@@ -276,6 +311,14 @@ export default function AdminInventoryPage() {
         </div>
 
         <div className="flex items-center gap-2.5 flex-wrap">
+          <button
+            onClick={() => setIsCategoryModalOpen(true)}
+            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white border border-slate-200 hover:bg-slate-50 text-xs font-semibold text-slate-700 transition shadow-2xs cursor-pointer"
+          >
+            <Tag className="w-3.5 h-3.5 text-blue-600" />
+            <span>+ Category</span>
+          </button>
+
           <button
             onClick={() => {
               if (categories.length > 0) setTargetCategoryForSub(categories[0].id);
@@ -708,45 +751,83 @@ export default function AdminInventoryPage() {
               {/* Category, Subcategory & Condition */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                    Category *
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5 flex items-center justify-between">
+                    <span>Category *</span>
+                    <button
+                      type="button"
+                      onClick={() => setIsCategoryModalOpen(true)}
+                      className="text-blue-600 hover:underline text-[10px] font-bold"
+                    >
+                      + New
+                    </button>
                   </label>
-                  <select
-                    value={formCategory}
-                    onChange={(e) => {
-                      setFormCategory(e.target.value);
-                      const cat = categories.find((c) => c.name === e.target.value);
-                      if (cat && cat.subcategories?.length > 0) {
-                        setFormSubcategory(cat.subcategories[0]);
-                      }
-                    }}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-600"
-                  >
-                    {categories.map((c) => (
-                      <option key={c.id} value={c.name}>
-                        {c.name}
-                      </option>
-                    ))}
-                  </select>
+                  {categories.length > 0 ? (
+                    <select
+                      value={formCategory}
+                      onChange={(e) => {
+                        setFormCategory(e.target.value);
+                        const cat = categories.find((c) => c.name === e.target.value);
+                        if (cat && cat.subcategories?.length > 0) {
+                          setFormSubcategory(cat.subcategories[0]);
+                        }
+                      }}
+                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-600"
+                    >
+                      {categories.map((c) => (
+                        <option key={c.id} value={c.name}>
+                          {c.name}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. Laptops, Accessories"
+                      value={formCategory}
+                      onChange={(e) => setFormCategory(e.target.value)}
+                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-600"
+                    />
+                  )}
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                    Subcategory
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5 flex items-center justify-between">
+                    <span>Subcategory</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (categories.length > 0) setTargetCategoryForSub(categories[0].id);
+                        setIsSubcategoryModalOpen(true);
+                      }}
+                      className="text-blue-600 hover:underline text-[10px] font-bold"
+                    >
+                      + New
+                    </button>
                   </label>
-                  <select
-                    value={formSubcategory}
-                    onChange={(e) => setFormSubcategory(e.target.value)}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-600"
-                  >
-                    {categories
-                      .find((c) => c.name === formCategory)
-                      ?.subcategories.map((sub) => (
-                        <option key={sub} value={sub}>
-                          {sub}
-                        </option>
-                      )) || <option value="General">General</option>}
-                  </select>
+                  {categories.find((c) => c.name === formCategory)?.subcategories?.length ? (
+                    <select
+                      value={formSubcategory}
+                      onChange={(e) => setFormSubcategory(e.target.value)}
+                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-600"
+                    >
+                      {categories
+                        .find((c) => c.name === formCategory)
+                        ?.subcategories.map((sub) => (
+                          <option key={sub} value={sub}>
+                            {sub}
+                          </option>
+                        ))}
+                    </select>
+                  ) : (
+                    <input
+                      type="text"
+                      placeholder="e.g. Business, Gaming, Mouse"
+                      value={formSubcategory}
+                      onChange={(e) => setFormSubcategory(e.target.value)}
+                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-600"
+                    />
+                  )}
                 </div>
 
                 <div>
@@ -1011,6 +1092,68 @@ export default function AdminInventoryPage() {
                   className="px-4 py-1.5 rounded-lg bg-blue-600 text-white text-xs font-bold"
                 >
                   Add
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Add Category Modal */}
+      {isCategoryModalOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-xl max-w-sm w-full overflow-hidden animate-slide-down">
+            <div className="flex items-center justify-between p-4 border-b border-slate-100">
+              <h3 className="text-sm font-black text-slate-900">Add Inventory Category</h3>
+              <button
+                onClick={() => setIsCategoryModalOpen(false)}
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-700"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleAddCategory} className="p-4 space-y-3">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Category Name *
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Laptops, Desktops, Mouse, RAM"
+                  value={newCategoryName}
+                  onChange={(e) => setNewCategoryName(e.target.value)}
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 font-bold"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Subcategories (Comma-separated)
+                </label>
+                <textarea
+                  rows={2}
+                  placeholder="e.g. Business, Gaming, MacBooks"
+                  value={newCategorySubs}
+                  onChange={(e) => setNewCategorySubs(e.target.value)}
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900"
+                />
+              </div>
+
+              <div className="pt-2 flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsCategoryModalOpen(false)}
+                  className="px-3 py-1.5 rounded-lg border text-xs font-semibold"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-1.5 rounded-lg bg-blue-600 text-white text-xs font-bold"
+                >
+                  Create Category
                 </button>
               </div>
             </form>
