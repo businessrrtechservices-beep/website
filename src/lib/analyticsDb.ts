@@ -39,10 +39,14 @@ export async function recordAnalyticsEvent(
     dateStr: getTodayString(),
   };
 
-  const db = await getMongoDb();
-  const collection = db.collection<AnalyticsEvent>(COLLECTION_NAME);
-  await collection.insertOne(event as any);
-  return true;
+  try {
+    const db = await getMongoDb();
+    const collection = db.collection<AnalyticsEvent>(COLLECTION_NAME);
+    await collection.insertOne(event as any);
+    return true;
+  } catch (err) {
+    return false;
+  }
 }
 
 export interface AnalyticsSummary {
@@ -62,73 +66,87 @@ export interface AnalyticsSummary {
  */
 export async function getAnalyticsSummary(): Promise<AnalyticsSummary> {
   const today = getTodayString();
-  const db = await getMongoDb();
-  const collection = db.collection<AnalyticsEvent>(COLLECTION_NAME);
+  try {
+    const db = await getMongoDb();
+    const collection = db.collection<AnalyticsEvent>(COLLECTION_NAME);
 
-  const [
-    totalVisits,
-    todayVisits,
-    totalInterests,
-    todayInterests,
-    recentInterestsRaw,
-    sectionAgg,
-    interestAgg,
-  ] = await Promise.all([
-    collection.countDocuments({ type: "visit" }),
-    collection.countDocuments({ type: "visit", dateStr: today }),
-    collection.countDocuments({ type: "interest_click" }),
-    collection.countDocuments({ type: "interest_click", dateStr: today }),
-    collection
-      .find({ type: "interest_click" })
-      .sort({ timestamp: -1 })
-      .limit(30)
-      .toArray(),
-    collection
-      .aggregate([
-        { $match: { type: "section_view" } },
-        { $group: { _id: "$sectionId", count: { $sum: 1 } } },
-        { $sort: { count: -1 } },
-        { $limit: 10 },
-      ])
-      .toArray(),
-    collection
-      .aggregate([
-        { $match: { type: "interest_click" } },
-        {
-          $group: {
-            _id: "$buttonText",
-            count: { $sum: 1 },
-            lastTarget: { $last: "$targetUrl" },
+    const [
+      totalVisits,
+      todayVisits,
+      totalInterests,
+      todayInterests,
+      recentInterestsRaw,
+      sectionAgg,
+      interestAgg,
+    ] = await Promise.all([
+      collection.countDocuments({ type: "visit" }),
+      collection.countDocuments({ type: "visit", dateStr: today }),
+      collection.countDocuments({ type: "interest_click" }),
+      collection.countDocuments({ type: "interest_click", dateStr: today }),
+      collection
+        .find({ type: "interest_click" })
+        .sort({ timestamp: -1 })
+        .limit(30)
+        .toArray(),
+      collection
+        .aggregate([
+          { $match: { type: "section_view" } },
+          { $group: { _id: "$sectionId", count: { $sum: 1 } } },
+          { $sort: { count: -1 } },
+          { $limit: 10 },
+        ])
+        .toArray(),
+      collection
+        .aggregate([
+          { $match: { type: "interest_click" } },
+          {
+            $group: {
+              _id: "$buttonText",
+              count: { $sum: 1 },
+              lastTarget: { $last: "$targetUrl" },
+            },
           },
-        },
-        { $sort: { count: -1 } },
-        { $limit: 10 },
-      ])
-      .toArray(),
-  ]);
+          { $sort: { count: -1 } },
+          { $limit: 10 },
+        ])
+        .toArray(),
+    ]);
 
-  const recentInterests = recentInterestsRaw.map(({ _id, ...rest }: any) => rest);
+    const recentInterests = recentInterestsRaw.map(({ _id, ...rest }: any) => rest);
 
-  const sectionViews = sectionAgg.map((item: any) => ({
-    sectionId: item._id || "unknown",
-    count: item.count,
-  }));
+    const sectionViews = sectionAgg.map((item: any) => ({
+      sectionId: item._id || "unknown",
+      count: item.count,
+    }));
 
-  const interestButtons = interestAgg.map((item: any) => ({
-    buttonText: item._id || "Unnamed Action",
-    count: item.count,
-    lastTarget: item.lastTarget,
-  }));
+    const interestButtons = interestAgg.map((item: any) => ({
+      buttonText: item._id || "Unnamed Action",
+      count: item.count,
+      lastTarget: item.lastTarget,
+    }));
 
-  return {
-    totalVisits,
-    todayVisits,
-    totalInterests,
-    todayInterests,
-    recentInterests,
-    sectionViews,
-    interestButtons,
-    dailyVisits: [],
-    dbConnected: true,
-  };
+    return {
+      totalVisits,
+      todayVisits,
+      totalInterests,
+      todayInterests,
+      recentInterests,
+      sectionViews,
+      interestButtons,
+      dailyVisits: [],
+      dbConnected: true,
+    };
+  } catch (err) {
+    return {
+      totalVisits: 0,
+      todayVisits: 0,
+      totalInterests: 0,
+      todayInterests: 0,
+      recentInterests: [],
+      sectionViews: [],
+      interestButtons: [],
+      dailyVisits: [],
+      dbConnected: false,
+    };
+  }
 }
