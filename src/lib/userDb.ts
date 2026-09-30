@@ -75,13 +75,15 @@ export async function ensureAdminUser(): Promise<void> {
 export async function verifyUserCredentials(
   identifier: string,
   pass: string
-): Promise<{ success: boolean; user?: { username: string; role: string; email: string } }> {
+): Promise<{ success: boolean; error?: string; user?: { username: string; role: string; email: string } }> {
   const cleanId = (identifier || "").trim().toLowerCase();
   const cleanPass = (pass || "").trim();
 
   if (!cleanId || !cleanPass) {
-    return { success: false };
+    return { success: false, error: "Please provide both username/email and password" };
   }
+
+  let dbError: string | null = null;
 
   try {
     const db = await getMongoDb();
@@ -95,17 +97,22 @@ export async function verifyUserCredentials(
       ],
     });
 
-    if (user && user.password === cleanPass) {
-      return {
-        success: true,
-        user: {
-          username: user.username,
-          role: user.role,
-          email: user.email,
-        },
-      };
+    if (user) {
+      if (user.password === cleanPass) {
+        return {
+          success: true,
+          user: {
+            username: user.username,
+            role: user.role || "superadmin",
+            email: user.email,
+          },
+        };
+      } else {
+        return { success: false, error: "Incorrect password entered" };
+      }
     }
-  } catch (err) {
+  } catch (err: any) {
+    dbError = err?.message || "Failed to connect to MongoDB";
     console.error("Error verifying credentials in DB:", err);
   }
 
@@ -130,7 +137,14 @@ export async function verifyUserCredentials(
     }
   }
 
-  return { success: false };
+  if (dbError) {
+    return {
+      success: false,
+      error: `Database connection error: ${dbError}. Please ensure MONGODB_URI is configured in production environment variables.`,
+    };
+  }
+
+  return { success: false, error: "User not found with this username/email" };
 }
 
 export async function getAllUsers(): Promise<User[]> {

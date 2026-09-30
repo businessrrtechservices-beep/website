@@ -11,7 +11,7 @@ export async function POST(req: NextRequest) {
 
     if (!authResult.success || !authResult.user) {
       return NextResponse.json(
-        { error: "Invalid username/email or password" },
+        { error: authResult.error || "Invalid username/email or password" },
         { status: 401 }
       );
     }

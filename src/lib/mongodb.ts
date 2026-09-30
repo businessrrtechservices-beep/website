@@ -1,7 +1,12 @@
 import { MongoClient, Db } from "mongodb";
 
-const uri = process.env.MONGODB_URI?.trim() || "";
-const dbName = process.env.MONGODB_DB?.trim() || "rrtechservices";
+function getUri(): string {
+  return process.env.MONGODB_URI?.trim() || "";
+}
+
+function getDbName(): string {
+  return process.env.MONGODB_DB?.trim() || "rrtechservices";
+}
 
 let client: MongoClient | null = null;
 let clientPromise: Promise<MongoClient> | null = null;
@@ -12,6 +17,7 @@ declare global {
 }
 
 export function isMongoConfigured(): boolean {
+  const uri = getUri();
   return Boolean(
     uri &&
     uri.startsWith("mongodb") &&
@@ -25,9 +31,10 @@ export function isMongoConfigured(): boolean {
  * Strictly requires the cloud MONGODB_URI; no local fallbacks.
  */
 export async function getMongoClient(): Promise<MongoClient> {
+  const uri = getUri();
   if (!isMongoConfigured()) {
     throw new Error(
-      "Cloud MongoDB Atlas is not configured. Please set your valid cloud MONGODB_URI in .env.local."
+      "Cloud MongoDB Atlas is not configured. Please set your valid cloud MONGODB_URI in environment variables."
     );
   }
 
@@ -52,5 +59,5 @@ export async function getMongoClient(): Promise<MongoClient> {
  */
 export async function getMongoDb(): Promise<Db> {
   const mongoClient = await getMongoClient();
-  return mongoClient.db(dbName);
+  return mongoClient.db(getDbName());
 }
