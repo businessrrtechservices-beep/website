@@ -17,6 +17,9 @@ import {
   Database,
   CheckCircle2,
   AlertTriangle,
+  Wallet,
+  Boxes,
+  Receipt,
 } from "lucide-react";
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
@@ -85,7 +88,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   const navItems = [
     { label: "Dashboard", href: "/admin", icon: LayoutDashboard },
-    { label: "Products", href: "/admin/products", icon: Laptop },
+    { label: "Wallet & Ledger", href: "/admin/ledger", icon: Wallet },
+    { label: "Stock & Inventory", href: "/admin/inventory", icon: Boxes },
+    { label: "Sales & Invoices", href: "/admin/sales", icon: Receipt },
+    { label: "Products Catalog", href: "/admin/products", icon: Laptop },
     { label: "Hero Controller", href: "/admin/hero", icon: Sliders },
     { label: "Analytics & Leads", href: "/admin/analytics", icon: BarChart3 },
     { label: "Settings & DB", href: "/admin/settings", icon: Settings },

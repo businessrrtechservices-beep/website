@@ -18,6 +18,9 @@ import {
   Database,
   CheckCircle2,
   AlertCircle,
+  Wallet,
+  Boxes,
+  Receipt,
 } from "lucide-react";
 
 export default function AdminDashboardPage() {
@@ -25,14 +28,20 @@ export default function AdminDashboardPage() {
   const [stats, setStats] = useState<any>(null);
   const [heroConfig, setHeroConfig] = useState<any>(null);
   const [productCount, setProductCount] = useState(0);
+  const [walletBalance, setWalletBalance] = useState(0);
+  const [totalSalesRevenue, setTotalSalesRevenue] = useState(0);
+  const [stockItemCount, setStockItemCount] = useState(0);
 
   const fetchDashboardData = async () => {
     setLoading(true);
     try {
-      const [analyticsRes, heroRes, productsRes] = await Promise.all([
+      const [analyticsRes, heroRes, productsRes, ledgerRes, salesRes, inventoryRes] = await Promise.all([
         fetch("/api/analytics/stats"),
         fetch("/api/hero"),
         fetch("/api/products"),
+        fetch("/api/ledger"),
+        fetch("/api/sales"),
+        fetch("/api/inventory/items"),
       ]);
 
       if (analyticsRes.ok) {
@@ -46,6 +55,18 @@ export default function AdminDashboardPage() {
       if (productsRes.ok) {
         const data = await productsRes.json();
         setProductCount(data.products?.length || 0);
+      }
+      if (ledgerRes.ok) {
+        const data = await ledgerRes.json();
+        setWalletBalance(data.summary?.balance || 0);
+      }
+      if (salesRes.ok) {
+        const data = await salesRes.json();
+        setTotalSalesRevenue(data.stats?.totalRevenue || 0);
+      }
+      if (inventoryRes.ok) {
+        const data = await inventoryRes.json();
+        setStockItemCount(data.items?.length || 0);
       }
     } catch (err) {
       console.error("Dashboard data load error:", err);
@@ -193,6 +214,81 @@ export default function AdminDashboardPage() {
           </div>
           <p className="mt-1 text-[11px] text-slate-400 font-medium">Laptops &amp; refurb listings</p>
         </div>
+      </div>
+
+      {/* Enterprise Shop Suite Overview */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {/* Wallet Balance Card */}
+        <Link
+          href="/admin/ledger"
+          className="p-5 rounded-2xl bg-white border border-slate-200 hover:border-blue-400 transition shadow-2xs group flex flex-col justify-between"
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold uppercase tracking-wider text-slate-500">
+              Wallet Balance
+            </span>
+            <div className="p-2 rounded-xl bg-blue-50 text-blue-600 group-hover:bg-blue-600 group-hover:text-white transition">
+              <Wallet className="w-4 h-4" />
+            </div>
+          </div>
+          <div className="mt-3">
+            <div className="text-2xl font-black text-slate-900 group-hover:text-blue-600 transition">
+              ₹{walletBalance.toLocaleString("en-IN")}
+            </div>
+            <p className="mt-1 text-xs text-slate-500 flex items-center gap-1 font-medium">
+              <span>View ledger &amp; credit/debit entries</span>
+              <ArrowRight className="w-3 h-3 group-hover:translate-x-1 transition" />
+            </p>
+          </div>
+        </Link>
+
+        {/* Stock & Inventory Card */}
+        <Link
+          href="/admin/inventory"
+          className="p-5 rounded-2xl bg-white border border-slate-200 hover:border-blue-400 transition shadow-2xs group flex flex-col justify-between"
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold uppercase tracking-wider text-slate-500">
+              Stock &amp; Accessories
+            </span>
+            <div className="p-2 rounded-xl bg-emerald-50 text-emerald-600 group-hover:bg-emerald-600 group-hover:text-white transition">
+              <Boxes className="w-4 h-4" />
+            </div>
+          </div>
+          <div className="mt-3">
+            <div className="text-2xl font-black text-slate-900 group-hover:text-emerald-600 transition">
+              {stockItemCount} SKUs
+            </div>
+            <p className="mt-1 text-xs text-slate-500 flex items-center gap-1 font-medium">
+              <span>Track allocations &amp; RRTS codes</span>
+              <ArrowRight className="w-3 h-3 group-hover:translate-x-1 transition" />
+            </p>
+          </div>
+        </Link>
+
+        {/* Sales & Invoicing Card */}
+        <Link
+          href="/admin/sales"
+          className="p-5 rounded-2xl bg-white border border-slate-200 hover:border-blue-400 transition shadow-2xs group flex flex-col justify-between"
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold uppercase tracking-wider text-slate-500">
+              Sales Revenue
+            </span>
+            <div className="p-2 rounded-xl bg-indigo-50 text-indigo-600 group-hover:bg-indigo-600 group-hover:text-white transition">
+              <Receipt className="w-4 h-4" />
+            </div>
+          </div>
+          <div className="mt-3">
+            <div className="text-2xl font-black text-slate-900 group-hover:text-indigo-600 transition">
+              ₹{totalSalesRevenue.toLocaleString("en-IN")}
+            </div>
+            <p className="mt-1 text-xs text-slate-500 flex items-center gap-1 font-medium">
+              <span>Create sales &amp; print tax invoices</span>
+              <ArrowRight className="w-3 h-3 group-hover:translate-x-1 transition" />
+            </p>
+          </div>
+        </Link>
       </div>
 
       {/* Hero Prices Quick Snapshot & Controller Banner */}
