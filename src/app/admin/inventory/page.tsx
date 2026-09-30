@@ -19,12 +19,15 @@ import {
   Eye,
   FileText,
   SlidersHorizontal,
+  Truck,
 } from "lucide-react";
 import { InventoryCategory, InventoryItem, StockAllocationRecord } from "@/lib/inventoryTypes";
+import { Dealer } from "@/lib/dealerTypes";
 
 export default function AdminInventoryPage() {
   const [categories, setCategories] = useState<InventoryCategory[]>([]);
   const [items, setItems] = useState<InventoryItem[]>([]);
+  const [dealers, setDealers] = useState<Dealer[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
@@ -46,6 +49,7 @@ export default function AdminInventoryPage() {
   const [formPurchasePrice, setFormPurchasePrice] = useState("");
   const [formSellingPrice, setFormSellingPrice] = useState("");
   const [formStockQuantity, setFormStockQuantity] = useState("1");
+  const [formDealerId, setFormDealerId] = useState("");
   const [formLocation, setFormLocation] = useState("");
   const [formNotes, setFormNotes] = useState("");
   
@@ -75,6 +79,18 @@ export default function AdminInventoryPage() {
       }
     } catch (err) {
       console.error(err);
+    }
+  };
+
+  const fetchDealers = async () => {
+    try {
+      const res = await fetch("/api/dealers");
+      if (res.ok) {
+        const data = await res.json();
+        setDealers(data.dealers || []);
+      }
+    } catch (err) {
+      console.error("Failed to load dealers:", err);
     }
   };
 
@@ -111,6 +127,7 @@ export default function AdminInventoryPage() {
 
   useEffect(() => {
     fetchCategories();
+    fetchDealers();
   }, []);
 
   useEffect(() => {
@@ -139,6 +156,8 @@ export default function AdminInventoryPage() {
         .map((s) => s.trim())
         .filter(Boolean);
 
+      const selectedDealer = dealers.find((d) => d.id === formDealerId);
+
       const res = await fetch("/api/inventory/items", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -154,6 +173,8 @@ export default function AdminInventoryPage() {
           purchasePrice: parseFloat(formPurchasePrice) || 0,
           sellingPrice: parseFloat(formSellingPrice) || 0,
           stockQuantity: parseInt(formStockQuantity, 10) || 1,
+          dealerId: selectedDealer?.id,
+          dealerName: selectedDealer?.name,
           location: formLocation.trim(),
           notes: formNotes.trim(),
           specs: {
@@ -179,6 +200,8 @@ export default function AdminInventoryPage() {
       setFormPurchasePrice("");
       setFormSellingPrice("");
       setFormStockQuantity("1");
+      setFormDealerId("");
+      setFormLocation("");
       setFormProcessor("");
       setFormRam("");
       setFormStorage("");
@@ -434,6 +457,12 @@ export default function AdminInventoryPage() {
                             {item.serialNumbers.length > 2 ? ` (+${item.serialNumbers.length - 2} more)` : ""}
                           </div>
                         )}
+                        {item.dealerName && (
+                          <div className="inline-flex items-center gap-1 mt-1 px-1.5 py-0.5 rounded bg-indigo-50 border border-indigo-200 text-indigo-700 text-[10px] font-semibold">
+                            <Truck className="w-3 h-3 text-indigo-500" />
+                            <span>Supplier: {item.dealerName}</span>
+                          </div>
+                        )}
                       </td>
 
                       {/* Category */}
@@ -528,6 +557,11 @@ export default function AdminInventoryPage() {
                 <span className="font-mono text-xs font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
                   {selectedItemForAudit.code}
                 </span>
+                {selectedItemForAudit.dealerName && (
+                  <span className="ml-2 inline-flex items-center gap-1 font-sans text-xs font-semibold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200">
+                    <Truck className="w-3 h-3" /> Supplier: {selectedItemForAudit.dealerName}
+                  </span>
+                )}
                 <h3 className="mt-1 text-base font-black text-slate-900">
                   Stock Allocation History &bull; {selectedItemForAudit.name}
                 </h3>
@@ -853,6 +887,41 @@ export default function AdminInventoryPage() {
                     value={formSellingPrice}
                     onChange={(e) => setFormSellingPrice(e.target.value)}
                     className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-600"
+                  />
+                </div>
+              </div>
+
+              {/* Dealer Supplier & Shelf Location */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5 flex items-center justify-between">
+                    <span>Procured From Dealer</span>
+                    <span className="text-[10px] text-slate-400 font-normal lowercase">(optional)</span>
+                  </label>
+                  <select
+                    value={formDealerId}
+                    onChange={(e) => setFormDealerId(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-600"
+                  >
+                    <option value="">-- No Dealer / Direct / Customer --</option>
+                    {dealers.map((d) => (
+                      <option key={d.id} value={d.id}>
+                        {d.name} ({d.categories?.join(", ") || "General"})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                    Storage Shelf / Rack
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Rack A-1, Showcase 2"
+                    value={formLocation}
+                    onChange={(e) => setFormLocation(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-600"
                   />
                 </div>
               </div>

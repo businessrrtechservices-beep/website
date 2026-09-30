@@ -43,6 +43,8 @@ export interface InventoryItem {
   stockQuantity: number; // Total units purchased/stocked
   availableQuantity: number; // Units currently in stock (stockQuantity - total allocated)
   allocatedRecords: StockAllocationRecord[]; // Audit trail: which customer/invoice holds each allocated unit
+  dealerId?: string; // Linked dealer / supplier ID
+  dealerName?: string; // Linked dealer name
   location?: string; // Shelf / Rack (e.g. "Rack A-2")
   notes?: string;
   createdAt: Date;

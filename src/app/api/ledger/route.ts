@@ -50,7 +50,18 @@ export async function POST(req: NextRequest) {
       date: body.date || new Date().toISOString(),
       invoiceId: body.invoiceId,
       invoiceNumber: body.invoiceNumber,
+      dealerId: body.dealerId,
+      dealerName: body.dealerName,
     });
+
+    if (body.dealerId && body.type === "debit") {
+      try {
+        const { recordDealerPayment } = await import("@/lib/dealersDb");
+        await recordDealerPayment(body.dealerId, Number(body.amount));
+      } catch (dealerErr) {
+        console.error("Failed to update dealer balance:", dealerErr);
+      }
+    }
 
     const summary = await getWalletSummary();
     return NextResponse.json({ transaction: tx, summary }, { status: 201 });

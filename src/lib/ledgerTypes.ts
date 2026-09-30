@@ -23,6 +23,8 @@ export interface WalletTransaction {
   date: string; // ISO string or YYYY-MM-DDTHH:mm
   invoiceId?: string;
   invoiceNumber?: string;
+  dealerId?: string;
+  dealerName?: string;
   createdAt: Date;
 }
 

@@ -50,9 +50,21 @@ export async function POST(req: NextRequest) {
       purchasePrice: Number(body.purchasePrice) || 0,
       sellingPrice: Number(body.sellingPrice) || 0,
       stockQuantity: Number(body.stockQuantity) || 1,
+      dealerId: body.dealerId || undefined,
+      dealerName: body.dealerName || undefined,
       location: body.location || "",
       notes: body.notes || "",
     });
+
+    if (body.dealerId && Number(body.purchasePrice) > 0) {
+      try {
+        const { recordDealerPurchase } = await import("@/lib/dealersDb");
+        const totalPurchaseValue = (Number(body.purchasePrice) || 0) * (Number(body.stockQuantity) || 1);
+        await recordDealerPurchase(body.dealerId, totalPurchaseValue);
+      } catch (dealerErr) {
+        console.error("Failed to update dealer purchase balance:", dealerErr);
+      }
+    }
 
     return NextResponse.json({ item }, { status: 201 });
   } catch (error: any) {

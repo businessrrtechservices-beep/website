@@ -12,59 +12,65 @@ export interface User {
 
 const COLLECTION_NAME = "users";
 
-export const ADMIN_USERS: User[] = [
-  {
-    username: "business.rrtechservices@gmail.com",
-    email: "business.rrtechservices@gmail.com",
-    password: "RRTechServices@01102026",
-    role: "admin",
-    name: "RR Tech Administrator",
-    createdAt: new Date(),
-  },
-  {
-    username: "business.rrtrchservices@gmail.com",
-    email: "business.rrtrchservices@gmail.com",
-    password: "RRTechServices@01102026",
-    role: "admin",
-    name: "RR Tech Administrator",
-    createdAt: new Date(),
-  },
-];
+/**
+ * Gets configured admin credentials strictly from environment variables (.env.local)
+ * Never hardcoded in source control.
+ */
+function getConfiguredAdmin(): { username: string; email: string; password?: string } | null {
+  const username = process.env.ADMIN_USERNAME?.trim().toLowerCase();
+  const password = process.env.ADMIN_PASSWORD?.trim();
+
+  if (!username || !password) {
+    return null;
+  }
+
+  return {
+    username,
+    email: username,
+    password,
+  };
+}
 
 /**
- * Ensures admin records exist in the MongoDB users table/collection
+ * Ensures admin record exists in the MongoDB users table using secure environment variables
  */
 export async function ensureAdminUser(): Promise<void> {
+  const envAdmin = getConfiguredAdmin();
+  if (!envAdmin?.password) return;
+
   try {
     const db = await getMongoDb();
     const collection = db.collection<User>(COLLECTION_NAME);
 
-    for (const adminUser of ADMIN_USERS) {
-      const existing = await collection.findOne({
-        $or: [
-          { username: adminUser.username.toLowerCase() },
-          { email: adminUser.email.toLowerCase() },
-        ],
-      });
+    const existing = await collection.findOne({
+      $or: [
+        { username: envAdmin.username },
+        { email: envAdmin.email },
+      ],
+    });
 
-      if (!existing) {
-        await collection.insertOne({ ...adminUser, createdAt: new Date() });
-        console.log(`Admin user ${adminUser.email} created in MongoDB users collection`);
-      } else if (existing.password !== adminUser.password) {
-        await collection.updateOne(
-          { _id: (existing as any)._id },
-          { $set: { password: adminUser.password, role: "admin" } }
-        );
-        console.log(`Admin user ${adminUser.email} password updated in MongoDB`);
-      }
+    if (!existing) {
+      await collection.insertOne({
+        username: envAdmin.username,
+        email: envAdmin.email,
+        password: envAdmin.password,
+        role: "admin",
+        name: "RR Tech Administrator",
+        createdAt: new Date(),
+      });
+    } else if (existing.password !== envAdmin.password) {
+      await collection.updateOne(
+        { _id: (existing as any)._id },
+        { $set: { password: envAdmin.password, role: "admin" } }
+      );
     }
   } catch (err) {
-    console.error("Error in ensureAdminUser:", err);
+    console.error("Error ensuring admin user in DB:", err);
   }
 }
 
 /**
- * Verifies user credentials strictly against the MongoDB database
+ * Verifies user credentials against MongoDB users collection, or secure env credentials
  */
 export async function verifyUserCredentials(
   identifier: string,
@@ -72,6 +78,10 @@ export async function verifyUserCredentials(
 ): Promise<{ success: boolean; user?: { username: string; role: string; email: string } }> {
   const cleanId = (identifier || "").trim().toLowerCase();
   const cleanPass = (pass || "").trim();
+
+  if (!cleanId || !cleanPass) {
+    return { success: false };
+  }
 
   try {
     const db = await getMongoDb();
@@ -99,23 +109,25 @@ export async function verifyUserCredentials(
     console.error("Error verifying credentials in DB:", err);
   }
 
-  // Check fallback against configured admin
-  const isMatch =
-    ADMIN_USERS.some(
-      (u) =>
-        (u.username.toLowerCase() === cleanId || u.email.toLowerCase() === cleanId) &&
-        u.password === cleanPass
-    );
+  // Fallback to secure environment variables in .env.local
+  const envAdmin = getConfiguredAdmin();
+  if (envAdmin) {
+    const isUserMatch =
+      cleanId === envAdmin.username ||
+      cleanId === envAdmin.email ||
+      cleanId === "admin";
+    const isPassMatch = cleanPass === envAdmin.password;
 
-  if (isMatch) {
-    return {
-      success: true,
-      user: {
-        username: cleanId,
-        role: "admin",
-        email: cleanId,
-      },
-    };
+    if (isUserMatch && isPassMatch) {
+      return {
+        success: true,
+        user: {
+          username: envAdmin.username,
+          role: "admin",
+          email: envAdmin.email,
+        },
+      };
+    }
   }
 
   return { success: false };
@@ -131,6 +143,15 @@ export async function getAllUsers(): Promise<User[]> {
       id: _id.toString(),
     }));
   } catch {
-    return ADMIN_USERS.map(({ password, ...u }) => u as User);
+    const envAdmin = getConfiguredAdmin();
+    if (envAdmin) {
+      return [{
+        username: envAdmin.username,
+        email: envAdmin.email,
+        role: "admin",
+        createdAt: new Date(),
+      }];
+    }
+    return [];
   }
 }

@@ -16,10 +16,12 @@ import {
   Trash2,
   TrendingUp,
   TrendingDown,
+  Truck,
   X,
   Loader2,
 } from "lucide-react";
 import { WalletTransaction, WalletSummary, PaymentMode, TransactionType } from "@/lib/ledgerTypes";
+import { Dealer } from "@/lib/dealerTypes";
 
 export default function AdminLedgerPage() {
   const [summary, setSummary] = useState<WalletSummary>({
@@ -31,6 +33,7 @@ export default function AdminLedgerPage() {
     transactionCount: 0,
   });
   const [transactions, setTransactions] = useState<WalletTransaction[]>([]);
+  const [dealers, setDealers] = useState<Dealer[]>([]);
   const [loading, setLoading] = useState(true);
   const [filterType, setFilterType] = useState<"all" | "credit" | "debit">("all");
   const [search, setSearch] = useState("");
@@ -54,6 +57,21 @@ export default function AdminLedgerPage() {
   const [isPartnerBorrowing, setIsPartnerBorrowing] = useState(false);
   const [selectedPartner, setSelectedPartner] = useState<"nauman" | "dinesh" | "subhan">("nauman");
 
+  // Dealer link
+  const [selectedDealerId, setSelectedDealerId] = useState("");
+
+  const fetchDealers = async () => {
+    try {
+      const res = await fetch("/api/dealers");
+      if (res.ok) {
+        const data = await res.json();
+        setDealers(data.dealers || []);
+      }
+    } catch (err) {
+      console.error("Failed to load dealers:", err);
+    }
+  };
+
   const fetchLedger = async () => {
     setLoading(true);
     try {
@@ -76,6 +94,7 @@ export default function AdminLedgerPage() {
 
   useEffect(() => {
     fetchLedger();
+    fetchDealers();
   }, [filterType]);
 
   const handleSearchSubmit = (e: React.FormEvent) => {
@@ -120,6 +139,8 @@ export default function AdminLedgerPage() {
           throw new Error(data.error || "Failed to record borrowing transaction");
         }
       } else {
+        const selectedDealer = dealers.find((d) => d.id === selectedDealerId);
+
         const res = await fetch("/api/ledger", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -130,6 +151,8 @@ export default function AdminLedgerPage() {
             category: formCategory,
             reason: formReason.trim(),
             referenceNumber: formRef.trim(),
+            dealerId: selectedDealer?.id,
+            dealerName: selectedDealer?.name,
             date: formDate ? new Date(formDate).toISOString() : new Date().toISOString(),
           }),
         });
@@ -145,6 +168,7 @@ export default function AdminLedgerPage() {
       setFormAmount("");
       setFormReason("");
       setFormRef("");
+      setSelectedDealerId("");
       setIsPartnerBorrowing(false);
       await fetchLedger();
     } catch (err: any) {
@@ -411,6 +435,12 @@ export default function AdminLedgerPage() {
                             Inv: {tx.invoiceNumber}
                           </span>
                         )}
+                        {tx.dealerName && (
+                          <span className="ml-1.5 text-[10px] bg-indigo-50 text-indigo-700 px-1.5 py-0.5 rounded font-bold border border-indigo-200 inline-flex items-center gap-0.5">
+                            <Truck className="w-2.5 h-2.5" />
+                            {tx.dealerName}
+                          </span>
+                        )}
                       </td>
                       <td className="py-3.5 px-4 text-slate-600 whitespace-nowrap">
                         <span className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 text-[10px] font-bold">
@@ -571,6 +601,7 @@ export default function AdminLedgerPage() {
                         const checked = e.target.checked;
                         setIsPartnerBorrowing(checked);
                         if (checked) {
+                          setSelectedDealerId("");
                           setFormCategory(formType === "credit" ? "Partner Borrowing" : "Partner Repayment");
                           setFormReason(
                             formType === "credit"
@@ -626,6 +657,50 @@ export default function AdminLedgerPage() {
                   </div>
                 )}
               </div>
+
+              {/* Dealer / Supplier Link (Active when not partner borrowing) */}
+              {!isPartnerBorrowing && (
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5 flex items-center justify-between">
+                    <span className="flex items-center gap-1.5">
+                      <Truck className="w-3.5 h-3.5 text-indigo-600" />
+                      <span>Link Dealer / Supplier</span>
+                    </span>
+                    <span className="text-[10px] text-slate-400 font-normal lowercase">(optional)</span>
+                  </label>
+                  <select
+                    value={selectedDealerId}
+                    onChange={(e) => {
+                      const id = e.target.value;
+                      setSelectedDealerId(id);
+                      const d = dealers.find((x) => x.id === id);
+                      if (d) {
+                        if (formType === "debit") {
+                          setFormCategory("Stock Purchase");
+                          setFormReason(`Payment to dealer: ${d.name}`);
+                        } else {
+                          setFormReason(`Refund / Credit from dealer: ${d.name}`);
+                        }
+                      }
+                    }}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-600"
+                  >
+                    <option value="">-- No Dealer Linked --</option>
+                    {dealers.map((d) => (
+                      <option key={d.id} value={d.id}>
+                        {d.name} ({d.categories?.join(", ") || "General"})
+                      </option>
+                    ))}
+                  </select>
+                  {selectedDealerId && (
+                    <p className="text-[10.5px] text-indigo-600 font-medium mt-1">
+                      {formType === "debit"
+                        ? "Recording this debit will log a payment to the dealer and reduce their outstanding balance."
+                        : "Linked to dealer records for tracking."}
+                    </p>
+                  )}
+                </div>
+              )}
 
               {/* Category & Date */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
