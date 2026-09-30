@@ -21,30 +21,28 @@ export const DEFAULT_ADMIN: User = {
   createdAt: new Date(),
 };
 
-let inMemoryUsers: User[] = [{ ...DEFAULT_ADMIN }];
-
+/**
+ * Ensures admin record exists in the cloud MongoDB users table/collection
+ */
 export async function ensureAdminUser(): Promise<void> {
-  try {
-    const db = await getMongoDb();
-    if (!db) return;
+  const db = await getMongoDb();
+  const collection = db.collection<User>(COLLECTION_NAME);
+  const existing = await collection.findOne({
+    $or: [
+      { username: DEFAULT_ADMIN.username },
+      { email: DEFAULT_ADMIN.email },
+    ],
+  });
 
-    const collection = db.collection<User>(COLLECTION_NAME);
-    const existing = await collection.findOne({
-      $or: [
-        { username: DEFAULT_ADMIN.username },
-        { email: DEFAULT_ADMIN.email },
-      ],
-    });
-
-    if (!existing) {
-      await collection.insertOne({ ...DEFAULT_ADMIN, createdAt: new Date() });
-      console.log("Admin user created in MongoDB users collection");
-    }
-  } catch (error) {
-    console.error("Error ensuring admin user:", error);
+  if (!existing) {
+    await collection.insertOne({ ...DEFAULT_ADMIN, createdAt: new Date() });
+    console.log("Admin user created in Cloud MongoDB users collection");
   }
 }
 
+/**
+ * Verifies user credentials strictly against the cloud MongoDB database
+ */
 export async function verifyUserCredentials(
   identifier: string,
   pass: string
@@ -52,49 +50,24 @@ export async function verifyUserCredentials(
   const cleanId = (identifier || "").trim().toLowerCase();
   const cleanPass = (pass || "").trim();
 
-  try {
-    const db = await getMongoDb();
-    if (db) {
-      const collection = db.collection<User>(COLLECTION_NAME);
-      await ensureAdminUser();
+  const db = await getMongoDb();
+  const collection = db.collection<User>(COLLECTION_NAME);
+  await ensureAdminUser();
 
-      const user = await collection.findOne({
-        $or: [
-          { username: cleanId },
-          { email: cleanId },
-        ],
-      });
+  const user = await collection.findOne({
+    $or: [
+      { username: cleanId },
+      { email: cleanId },
+    ],
+  });
 
-      if (user && user.password === cleanPass) {
-        return {
-          success: true,
-          user: {
-            username: user.username,
-            role: user.role,
-            email: user.email,
-          },
-        };
-      }
-    }
-  } catch (error) {
-    console.error("Error verifying credentials in DB:", error);
-  }
-
-  // Fallback to in-memory or env credentials
-  const envUser = (process.env.ADMIN_USERNAME || DEFAULT_ADMIN.username).trim().toLowerCase();
-  const envPass = (process.env.ADMIN_PASSWORD || DEFAULT_ADMIN.password || "").trim();
-
-  const isMatch =
-    (cleanId === envUser || cleanId === DEFAULT_ADMIN.username.toLowerCase()) &&
-    (cleanPass === envPass || cleanPass === DEFAULT_ADMIN.password);
-
-  if (isMatch) {
+  if (user && user.password === cleanPass) {
     return {
       success: true,
       user: {
-        username: DEFAULT_ADMIN.username,
-        role: "admin",
-        email: DEFAULT_ADMIN.email,
+        username: user.username,
+        role: user.role,
+        email: user.email,
       },
     };
   }
@@ -103,17 +76,11 @@ export async function verifyUserCredentials(
 }
 
 export async function getAllUsers(): Promise<User[]> {
-  try {
-    const db = await getMongoDb();
-    if (!db) return inMemoryUsers.map(({ password, ...u }) => u as User);
-
-    const collection = db.collection<User>(COLLECTION_NAME);
-    const items = await collection.find({}, { projection: { password: 0 } }).toArray();
-    return items.map(({ _id, ...rest }: any) => ({
-      ...rest,
-      id: _id.toString(),
-    }));
-  } catch {
-    return inMemoryUsers.map(({ password, ...u }) => u as User);
-  }
+  const db = await getMongoDb();
+  const collection = db.collection<User>(COLLECTION_NAME);
+  const items = await collection.find({}, { projection: { password: 0 } }).toArray();
+  return items.map(({ _id, ...rest }: any) => ({
+    ...rest,
+    id: _id.toString(),
+  }));
 }

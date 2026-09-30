@@ -20,9 +20,15 @@ export function isMongoConfigured(): boolean {
   );
 }
 
-export async function getMongoClient(): Promise<MongoClient | null> {
+/**
+ * Returns the connected MongoClient for the main cloud MongoDB instance.
+ * Strictly requires the cloud MONGODB_URI; no local fallbacks.
+ */
+export async function getMongoClient(): Promise<MongoClient> {
   if (!isMongoConfigured()) {
-    return null;
+    throw new Error(
+      "Cloud MongoDB Atlas is not configured. Please set your valid cloud MONGODB_URI in .env.local."
+    );
   }
 
   if (process.env.NODE_ENV === "development") {
@@ -38,16 +44,13 @@ export async function getMongoClient(): Promise<MongoClient | null> {
     }
   }
 
-  try {
-    return await clientPromise;
-  } catch (error) {
-    console.error("Failed to connect to MongoDB:", error);
-    return null;
-  }
+  return await clientPromise;
 }
 
-export async function getMongoDb(): Promise<Db | null> {
+/**
+ * Returns the Db instance directly from cloud MongoDB.
+ */
+export async function getMongoDb(): Promise<Db> {
   const mongoClient = await getMongoClient();
-  if (!mongoClient) return null;
   return mongoClient.db(dbName);
 }

@@ -4,14 +4,15 @@ import { HeroConfig, defaultHeroConfig } from "./heroTypes";
 export { defaultHeroConfig, type HeroConfig };
 
 const COLLECTION_NAME = "hero_config";
-let inMemoryHeroConfig: HeroConfig = { ...defaultHeroConfig };
+
+/**
+ * Cloud MongoDB Hero Service
+ * Exclusively queries and saves to the Cloud MongoDB Atlas cluster.
+ */
 
 export async function getHeroConfig(): Promise<HeroConfig> {
   try {
     const db = await getMongoDb();
-    if (!db) {
-      return inMemoryHeroConfig;
-    }
     const collection = db.collection<any>(COLLECTION_NAME);
     const doc = await collection.findOne({ key: "hero_main" });
     if (!doc) {
@@ -21,25 +22,21 @@ export async function getHeroConfig(): Promise<HeroConfig> {
     const { _id, key, ...rest } = doc;
     return { ...defaultHeroConfig, ...rest };
   } catch (err) {
-    console.error("Error reading hero config from DB:", err);
-    return inMemoryHeroConfig;
+    console.error("Cloud MongoDB Hero query failed, returning defaults:", err);
+    return defaultHeroConfig;
   }
 }
 
 export async function updateHeroConfig(config: Partial<HeroConfig>): Promise<HeroConfig> {
-  inMemoryHeroConfig = { ...inMemoryHeroConfig, ...config };
-  try {
-    const db = await getMongoDb();
-    if (db) {
-      const collection = db.collection(COLLECTION_NAME);
-      await collection.updateOne(
-        { key: "hero_main" },
-        { $set: { key: "hero_main", ...inMemoryHeroConfig } },
-        { upsert: true }
-      );
-    }
-  } catch (err) {
-    console.error("Error saving hero config to DB:", err);
-  }
-  return inMemoryHeroConfig;
+  const db = await getMongoDb();
+  const collection = db.collection<any>(COLLECTION_NAME);
+  const current = await getHeroConfig();
+  const updated = { ...current, ...config };
+
+  await collection.updateOne(
+    { key: "hero_main" },
+    { $set: { key: "hero_main", ...updated } },
+    { upsert: true }
+  );
+  return updated;
 }

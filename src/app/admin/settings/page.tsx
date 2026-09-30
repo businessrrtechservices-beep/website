@@ -83,11 +83,11 @@ export default function AdminSettingsPage() {
 
             {system?.mongoConnected ? (
               <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-bold">
-                <CheckCircle2 className="w-3.5 h-3.5" /> Connected
+                <CheckCircle2 className="w-3.5 h-3.5" /> Atlas Connected
               </span>
             ) : (
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-50 text-amber-800 border border-amber-200 text-xs font-bold">
-                <AlertTriangle className="w-3.5 h-3.5" /> Local Fallback Mode
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-red-50 text-red-800 border border-red-200 text-xs font-bold">
+                <AlertTriangle className="w-3.5 h-3.5" /> Atlas Disconnected
               </span>
             )}
           </div>
@@ -95,8 +95,8 @@ export default function AdminSettingsPage() {
           <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 text-xs space-y-2.5">
             <p className="text-slate-700 font-medium leading-relaxed">
               {system?.mongoConnected
-                ? "MongoDB is actively connected! All product additions, hero modifications, and visits are securely stored in your cluster."
-                : "MongoDB is operating in resilient local mode until the database password is added to .env.local."}
+                ? "MongoDB Atlas cluster is actively connected! All products, hero configs, and analytics are stored directly in your cloud cluster."
+                : "Cloud MongoDB Atlas is the exclusive database. Add your Atlas database user password in .env.local to connect to your cluster."}
             </p>
 
             <div className="mt-2 pt-2.5 border-t border-slate-200">
