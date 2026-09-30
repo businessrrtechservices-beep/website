@@ -17,6 +17,7 @@ import {
   TrendingUp,
   TrendingDown,
   Truck,
+  Users,
   X,
   Loader2,
 } from "lucide-react";
@@ -55,8 +56,9 @@ export default function AdminLedgerPage() {
 
   // Partner Borrowing / Repayment Flag
   const [isPartnerBorrowing, setIsPartnerBorrowing] = useState(false);
-  const [partnerWallets, setPartnerWallets] = useState<{ id: string; name: string }[]>([]);
+  const [partnerWallets, setPartnerWallets] = useState<{ id: string; name: string; currentBorrowedBalance?: number }[]>([]);
   const [selectedPartnerId, setSelectedPartnerId] = useState("");
+  const [debitFlag, setDebitFlag] = useState<"borrower" | "dealer" | "expense">("dealer");
 
   // Dealer link
   const [selectedDealerId, setSelectedDealerId] = useState("");
@@ -613,124 +615,258 @@ export default function AdminLedgerPage() {
                 </div>
               </div>
 
-              {/* Borrowing / Partner Flag */}
-              <div className="p-3.5 rounded-xl bg-blue-50/70 border border-blue-200 space-y-2.5">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      id="partnerBorrowFlag"
-                      checked={isPartnerBorrowing}
-                      onChange={(e) => {
-                        const checked = e.target.checked;
-                        setIsPartnerBorrowing(checked);
-                        if (checked) {
+              {/* Debit 2-Flag System vs Credit Source */}
+              {formType === "debit" ? (
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                      Debit Purpose (2 Flags) *
+                    </label>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setDebitFlag("borrower");
+                          setIsPartnerBorrowing(true);
                           setSelectedDealerId("");
-                          setFormCategory(formType === "credit" ? "Partner Borrowing" : "Partner Repayment");
+                          setFormCategory("Partner Repayment");
                           const curP = partnerWallets.find((p) => p.id === selectedPartnerId) || partnerWallets[0];
                           if (curP) {
                             setSelectedPartnerId(curP.id);
-                            setFormReason(
-                              formType === "credit"
-                                ? `Borrowed from ${curP.name}`
-                                : `Repaid to ${curP.name}`
-                            );
+                            setFormReason(`Repayment to partner: ${curP.name}`);
+                            if (curP.currentBorrowedBalance && curP.currentBorrowedBalance > 0) {
+                              setFormAmount(String(curP.currentBorrowedBalance));
+                            }
                           }
-                        }
-                      }}
-                      className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 border-slate-300"
-                    />
-                    <label htmlFor="partnerBorrowFlag" className="text-xs font-bold text-slate-800 cursor-pointer">
-                      Is this a Partner Borrowing or Repayment?
-                    </label>
-                  </div>
-                </div>
+                        }}
+                        className={`p-2.5 rounded-xl border text-xs font-bold flex items-center sm:flex-col justify-center gap-1.5 transition cursor-pointer text-left sm:text-center ${
+                          debitFlag === "borrower"
+                            ? "bg-blue-600 text-white border-blue-600 shadow-2xs"
+                            : "bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100"
+                        }`}
+                      >
+                        <Users className="w-4 h-4 shrink-0" />
+                        <span>Flag 1: Borrower Repayment</span>
+                      </button>
 
-                {isPartnerBorrowing && (
-                  <div className="pt-2 border-t border-blue-200/70 space-y-2">
-                    {partnerWallets.length === 0 ? (
-                      <p className="text-xs text-amber-800 bg-amber-50 p-2.5 rounded-lg border border-amber-200">
-                        No partner accounts added yet. Please add a partner in the &ldquo;Borrowing&rdquo; section first.
-                      </p>
-                    ) : (
-                      <>
-                        <label className="block text-[11px] font-bold text-slate-700">
-                          Select Partner:
-                        </label>
-                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                          {partnerWallets.map((p) => (
-                            <button
-                              key={p.id}
-                              type="button"
-                              onClick={() => {
-                                setSelectedPartnerId(p.id);
-                                setFormReason(
-                                  formType === "credit"
-                                    ? `Borrowed from ${p.name}`
-                                    : `Repaid to ${p.name}`
-                                );
-                              }}
-                              className={`py-1.5 px-2 rounded-lg text-xs font-bold capitalize transition cursor-pointer truncate ${
-                                selectedPartnerId === p.id
-                                  ? "bg-blue-600 text-white shadow-2xs"
-                                  : "bg-white text-slate-700 border border-slate-200 hover:bg-slate-100"
-                              }`}
-                            >
-                              {p.name}
-                            </button>
-                          ))}
-                        </div>
-                        <p className="text-[10.5px] text-slate-600">
-                          {formType === "credit"
-                            ? `Main wallet receives +₹${formAmount || "0"} & partner borrowed balance increases.`
-                            : `Main wallet deducts -₹${formAmount || "0"} & partner borrowed balance decreases towards ₹0.`}
-                        </p>
-                      </>
-                    )}
-                  </div>
-                )}
-              </div>
-
-              {/* Dealer / Supplier Link (Active when not partner borrowing) */}
-              {!isPartnerBorrowing && (
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5 flex items-center justify-between">
-                    <span className="flex items-center gap-1.5">
-                      <Truck className="w-3.5 h-3.5 text-indigo-600" />
-                      <span>Link Dealer / Supplier</span>
-                    </span>
-                    <span className="text-[10px] text-slate-400 font-normal lowercase">(optional)</span>
-                  </label>
-                  <select
-                    value={selectedDealerId}
-                    onChange={(e) => {
-                      const id = e.target.value;
-                      setSelectedDealerId(id);
-                      const d = dealers.find((x) => x.id === id);
-                      if (d) {
-                        if (formType === "debit") {
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setDebitFlag("dealer");
+                          setIsPartnerBorrowing(false);
                           setFormCategory("Stock Purchase");
-                          setFormReason(`Payment to dealer: ${d.name}`);
-                        } else {
-                          setFormReason(`Refund / Credit from dealer: ${d.name}`);
-                        }
-                      }
-                    }}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-600"
-                  >
-                    <option value="">-- No Dealer Linked --</option>
-                    {dealers.map((d) => (
-                      <option key={d.id} value={d.id}>
-                        {d.name} ({d.categories?.join(", ") || "General"})
-                      </option>
-                    ))}
-                  </select>
-                  {selectedDealerId && (
-                    <p className="text-[10.5px] text-indigo-600 font-medium mt-1">
-                      {formType === "debit"
-                        ? "Recording this debit will log a payment to the dealer and reduce their outstanding balance."
-                        : "Linked to dealer records for tracking."}
-                    </p>
+                          const curD = dealers.find((d) => d.id === selectedDealerId) || dealers[0];
+                          if (curD) {
+                            setSelectedDealerId(curD.id);
+                            setFormReason(`Payment to dealer: ${curD.name}`);
+                            if (curD.outstandingBalance > 0) {
+                              setFormAmount(String(curD.outstandingBalance));
+                            }
+                          }
+                        }}
+                        className={`p-2.5 rounded-xl border text-xs font-bold flex items-center sm:flex-col justify-center gap-1.5 transition cursor-pointer text-left sm:text-center ${
+                          debitFlag === "dealer"
+                            ? "bg-indigo-600 text-white border-indigo-600 shadow-2xs"
+                            : "bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100"
+                        }`}
+                      >
+                        <Truck className="w-4 h-4 shrink-0" />
+                        <span>Flag 2: Dealer Credit</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setDebitFlag("expense");
+                          setIsPartnerBorrowing(false);
+                          setSelectedDealerId("");
+                          setFormCategory("Spare Parts");
+                          setFormReason("");
+                        }}
+                        className={`p-2.5 rounded-xl border text-xs font-bold flex items-center sm:flex-col justify-center gap-1.5 transition cursor-pointer text-left sm:text-center ${
+                          debitFlag === "expense"
+                            ? "bg-rose-600 text-white border-rose-600 shadow-2xs"
+                            : "bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100"
+                        }`}
+                      >
+                        <CreditCard className="w-4 h-4 shrink-0" />
+                        <span>Shop Expense</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Flag 1 Panel: Borrower Repayment */}
+                  {debitFlag === "borrower" && (
+                    <div className="p-3.5 rounded-xl bg-blue-50/80 border border-blue-200 space-y-2.5">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-blue-900">
+                          Select Partner to Repay:
+                        </span>
+                        <span className="text-[10.5px] text-blue-700 font-medium">
+                          Decreases partner's borrowed debt towards ₹0
+                        </span>
+                      </div>
+                      {partnerWallets.length === 0 ? (
+                        <p className="text-xs text-amber-800 bg-amber-50 p-2.5 rounded-lg border border-amber-200">
+                          No partner wallets found. Add a partner in the &ldquo;Borrowing&rdquo; section first.
+                        </p>
+                      ) : (
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                          {partnerWallets.map((p) => {
+                            const isSelected = selectedPartnerId === p.id;
+                            const balance = p.currentBorrowedBalance || 0;
+                            return (
+                              <button
+                                key={p.id}
+                                type="button"
+                                onClick={() => {
+                                  setSelectedPartnerId(p.id);
+                                  setFormReason(`Repayment to partner: ${p.name}`);
+                                  if (balance > 0) setFormAmount(String(balance));
+                                }}
+                                className={`p-2 rounded-xl border text-left transition cursor-pointer ${
+                                  isSelected
+                                    ? "bg-blue-600 text-white border-blue-600 shadow-2xs"
+                                    : "bg-white text-slate-800 border-slate-200 hover:bg-slate-50"
+                                }`}
+                              >
+                                <div className="text-xs font-bold truncate">{p.name}</div>
+                                <div className={`text-[10px] mt-0.5 ${isSelected ? "text-blue-100" : "text-rose-600 font-semibold"}`}>
+                                  Owed: ₹{balance.toLocaleString("en-IN")}
+                                </div>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Flag 2 Panel: Dealer Credit Settlement */}
+                  {debitFlag === "dealer" && (
+                    <div className="p-3.5 rounded-xl bg-indigo-50/80 border border-indigo-200 space-y-2.5">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-indigo-900">
+                          Select Supplier / Dealer to Pay:
+                        </span>
+                        <span className="text-[10.5px] text-indigo-700 font-medium">
+                          Settles debt for stock bought on credit
+                        </span>
+                      </div>
+                      {dealers.length === 0 ? (
+                        <p className="text-xs text-amber-800 bg-amber-50 p-2.5 rounded-lg border border-amber-200">
+                          No dealers found. Add wholesale suppliers in the &ldquo;Dealers&rdquo; section.
+                        </p>
+                      ) : (
+                        <div className="space-y-2">
+                          <select
+                            value={selectedDealerId}
+                            onChange={(e) => {
+                              const dId = e.target.value;
+                              setSelectedDealerId(dId);
+                              const d = dealers.find((x) => x.id === dId);
+                              if (d) {
+                                setFormReason(`Payment to dealer: ${d.name}`);
+                                if (d.outstandingBalance > 0) {
+                                  setFormAmount(String(d.outstandingBalance));
+                                }
+                              }
+                            }}
+                            className="w-full px-3 py-2 bg-white border border-indigo-200 rounded-xl text-xs font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-600"
+                          >
+                            <option value="">-- Choose Dealer to Settle --</option>
+                            {dealers.map((d) => (
+                              <option key={d.id} value={d.id}>
+                                {d.name} &bull; Outstanding Debt: ₹{d.outstandingBalance.toLocaleString("en-IN")}
+                              </option>
+                            ))}
+                          </select>
+                          {selectedDealerId && (
+                            <div className="flex items-center justify-between text-[11px] bg-white p-2 rounded-lg border border-indigo-100">
+                              <span className="text-slate-600">
+                                Outstanding Credit:{" "}
+                                <strong className="text-rose-600">
+                                  ₹{dealers.find((d) => d.id === selectedDealerId)?.outstandingBalance.toLocaleString("en-IN") || 0}
+                                </strong>
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const bal = dealers.find((d) => d.id === selectedDealerId)?.outstandingBalance || 0;
+                                  if (bal > 0) setFormAmount(String(bal));
+                                }}
+                                className="px-2.5 py-1 rounded bg-indigo-100 hover:bg-indigo-200 text-indigo-800 font-bold text-[10px] cursor-pointer"
+                              >
+                                Settle Full Amount (₹{dealers.find((d) => d.id === selectedDealerId)?.outstandingBalance.toLocaleString("en-IN") || 0})
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                /* Credit (Cash In) Options */
+                <div className="p-3.5 rounded-xl bg-emerald-50/70 border border-emerald-200 space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        id="partnerBorrowFlagCredit"
+                        checked={isPartnerBorrowing}
+                        onChange={(e) => {
+                          const checked = e.target.checked;
+                          setIsPartnerBorrowing(checked);
+                          if (checked) {
+                            setSelectedDealerId("");
+                            setFormCategory("Partner Borrowing");
+                            const curP = partnerWallets.find((p) => p.id === selectedPartnerId) || partnerWallets[0];
+                            if (curP) {
+                              setSelectedPartnerId(curP.id);
+                              setFormReason(`Borrowed from ${curP.name}`);
+                            }
+                          } else {
+                            setFormCategory("Sale");
+                            setFormReason("");
+                          }
+                        }}
+                        className="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 border-slate-300 cursor-pointer"
+                      />
+                      <label htmlFor="partnerBorrowFlagCredit" className="text-xs font-bold text-slate-800 cursor-pointer">
+                        Is this money borrowed from a Partner?
+                      </label>
+                    </div>
+                  </div>
+
+                  {isPartnerBorrowing && (
+                    <div className="pt-2 border-t border-emerald-200/70 space-y-2">
+                      <label className="block text-[11px] font-bold text-slate-700">
+                        Select Lending Partner:
+                      </label>
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                        {partnerWallets.map((p) => (
+                          <button
+                            key={p.id}
+                            type="button"
+                            onClick={() => {
+                              setSelectedPartnerId(p.id);
+                              setFormReason(`Borrowed from ${p.name}`);
+                            }}
+                            className={`py-1.5 px-2 rounded-lg text-xs font-bold capitalize transition cursor-pointer truncate ${
+                              selectedPartnerId === p.id
+                                ? "bg-emerald-600 text-white shadow-2xs"
+                                : "bg-white text-slate-700 border border-slate-200 hover:bg-slate-100"
+                            }`}
+                          >
+                            {p.name}
+                          </button>
+                        ))}
+                      </div>
+                      <p className="text-[10.5px] text-slate-600">
+                        Main wallet receives +₹{formAmount || "0"} &amp; partner borrowed balance increases.
+                      </p>
+                    </div>
                   )}
                 </div>
               )}

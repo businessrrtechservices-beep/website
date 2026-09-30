@@ -18,9 +18,11 @@ import {
   IndianRupee,
 } from "lucide-react";
 import { Product } from "@/lib/productTypes";
+import { Brand } from "@/lib/brandTypes";
 
 export default function AdminProductsPage() {
   const [products, setProducts] = useState<Product[]>([]);
+  const [brands, setBrands] = useState<Brand[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [selectedBrand, setSelectedBrand] = useState("All");
@@ -62,8 +64,21 @@ export default function AdminProductsPage() {
     }
   };
 
+  const fetchBrands = async () => {
+    try {
+      const res = await fetch("/api/brands");
+      if (res.ok) {
+        const data = await res.json();
+        setBrands(data.brands || []);
+      }
+    } catch (err) {
+      console.error("Error fetching brands:", err);
+    }
+  };
+
   useEffect(() => {
     fetchProducts();
+    fetchBrands();
   }, []);
 
   const openAddModal = () => {
@@ -199,7 +214,10 @@ export default function AdminProductsPage() {
     }
   };
 
-  const dynamicBrands = ["All", ...Array.from(new Set(products.map((p) => p.brand).filter(Boolean)))];
+  const dynamicBrands = [
+    "All",
+    ...Array.from(new Set([...brands.map((b) => b.name), ...products.map((p) => p.brand)].filter(Boolean))),
+  ];
 
   const filteredProducts = products.filter((p) => {
     const matchesSearch =
@@ -216,13 +234,13 @@ export default function AdminProductsPage() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-5 border-b border-slate-200">
         <div>
           <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight flex items-center gap-2">
-            <span>Product Catalog</span>
+            <span>Website Product Catalog (Public)</span>
             <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-blue-100 text-blue-700 border border-blue-200">
               {products.length} Products
             </span>
           </h1>
           <p className="mt-1 text-xs sm:text-sm text-slate-500 font-medium">
-            Manage refurbished laptops, specifications, prices &amp; Cloudinary photos
+            Customer-facing catalog shown on the website &bull; For internal shop stock with serials &amp; supplier credit, use Inventory
           </p>
         </div>
 
@@ -459,7 +477,7 @@ export default function AdminProductsPage() {
                     className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-slate-900 focus:bg-white focus:ring-2 focus:ring-blue-600 outline-none"
                   />
                   <datalist id="brand-datalist">
-                    {Array.from(new Set(products.map((p) => p.brand).filter(Boolean))).map((b) => (
+                    {Array.from(new Set([...brands.map((b) => b.name), ...products.map((p) => p.brand)].filter(Boolean))).map((b) => (
                       <option key={b} value={b} />
                     ))}
                   </datalist>

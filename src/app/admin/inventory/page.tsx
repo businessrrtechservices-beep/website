@@ -23,11 +23,13 @@ import {
 } from "lucide-react";
 import { InventoryCategory, InventoryItem, StockAllocationRecord } from "@/lib/inventoryTypes";
 import { Dealer } from "@/lib/dealerTypes";
+import { Brand } from "@/lib/brandTypes";
 
 export default function AdminInventoryPage() {
   const [categories, setCategories] = useState<InventoryCategory[]>([]);
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [dealers, setDealers] = useState<Dealer[]>([]);
+  const [brands, setBrands] = useState<Brand[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
@@ -67,6 +69,12 @@ export default function AdminInventoryPage() {
   const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState("");
   const [newCategorySubs, setNewCategorySubs] = useState("");
+
+  // Brand modal state & Bought on Credit flag
+  const [isBrandModalOpen, setIsBrandModalOpen] = useState(false);
+  const [newBrandName, setNewBrandName] = useState("");
+  const [newBrandOrigin, setNewBrandOrigin] = useState("");
+  const [formBoughtOnCredit, setFormBoughtOnCredit] = useState(true);
 
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -130,9 +138,46 @@ export default function AdminInventoryPage() {
     }
   };
 
+  const fetchBrands = async () => {
+    try {
+      const res = await fetch("/api/brands");
+      if (res.ok) {
+        const data = await res.json();
+        setBrands(data.brands || []);
+      }
+    } catch (err) {
+      console.error("Failed to load brands:", err);
+    }
+  };
+
+  const handleAddBrand = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newBrandName.trim()) return;
+    try {
+      const res = await fetch("/api/brands", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: newBrandName.trim(),
+          origin: newBrandOrigin.trim() || undefined,
+        }),
+      });
+      if (res.ok) {
+        setIsBrandModalOpen(false);
+        setFormBrand(newBrandName.trim());
+        setNewBrandName("");
+        setNewBrandOrigin("");
+        await fetchBrands();
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
   useEffect(() => {
     fetchCategories();
     fetchDealers();
+    fetchBrands();
   }, []);
 
   useEffect(() => {
@@ -180,6 +225,7 @@ export default function AdminInventoryPage() {
           stockQuantity: parseInt(formStockQuantity, 10) || 1,
           dealerId: selectedDealer?.id,
           dealerName: selectedDealer?.name,
+          boughtOnCredit: Boolean(selectedDealer && formBoughtOnCredit),
           location: formLocation.trim(),
           notes: formNotes.trim(),
           specs: {
@@ -303,14 +349,22 @@ export default function AdminInventoryPage() {
         <div>
           <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight flex items-center gap-2">
             <Boxes className="w-5 h-5 text-blue-600" />
-            <span>Stock &amp; Inventory Management</span>
+            <span>Internal Shop Stock &amp; Inventory</span>
           </h1>
           <p className="mt-1 text-xs sm:text-sm text-slate-500 font-medium">
-            Track laptops, computer accessories, RRTS codes &amp; customer allocation audit trails
+            Internal hardware units, RRTS- codes, supplier credit, shelf locations &amp; customer allocation audit trails
           </p>
         </div>
 
         <div className="flex items-center gap-2.5 flex-wrap">
+          <button
+            onClick={() => setIsBrandModalOpen(true)}
+            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white border border-slate-200 hover:bg-slate-50 text-xs font-semibold text-slate-700 transition shadow-2xs cursor-pointer"
+          >
+            <Tag className="w-3.5 h-3.5 text-indigo-600" />
+            <span>+ Brand</span>
+          </button>
+
           <button
             onClick={() => setIsCategoryModalOpen(true)}
             className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white border border-slate-200 hover:bg-slate-50 text-xs font-semibold text-slate-700 transition shadow-2xs cursor-pointer"
@@ -501,9 +555,16 @@ export default function AdminInventoryPage() {
                           </div>
                         )}
                         {item.dealerName && (
-                          <div className="inline-flex items-center gap-1 mt-1 px-1.5 py-0.5 rounded bg-indigo-50 border border-indigo-200 text-indigo-700 text-[10px] font-semibold">
-                            <Truck className="w-3 h-3 text-indigo-500" />
-                            <span>Supplier: {item.dealerName}</span>
+                          <div className="flex flex-wrap items-center gap-1 mt-1">
+                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-indigo-50 border border-indigo-200 text-indigo-700 text-[10px] font-semibold">
+                              <Truck className="w-3 h-3 text-indigo-500" />
+                              <span>Supplier: {item.dealerName}</span>
+                            </span>
+                            {item.boughtOnCredit && (
+                              <span className="px-1.5 py-0.5 rounded bg-rose-50 border border-rose-200 text-rose-700 text-[9.5px] font-bold">
+                                On Credit
+                              </span>
+                            )}
                           </div>
                         )}
                       </td>
@@ -850,16 +911,31 @@ export default function AdminInventoryPage() {
               {/* Brand & Model */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                    Brand (Dell, HP, Apple, Logitech...)
-                  </label>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                      Brand *
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setIsBrandModalOpen(true)}
+                      className="text-blue-600 hover:underline text-[10px] font-bold cursor-pointer"
+                    >
+                      + New Brand
+                    </button>
+                  </div>
                   <input
                     type="text"
+                    list="inventory-brands-list"
                     value={formBrand}
                     onChange={(e) => setFormBrand(e.target.value)}
-                    placeholder="e.g. Dell"
+                    placeholder="e.g. Dell, HP, Apple, Logitech..."
                     className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-600"
                   />
+                  <datalist id="inventory-brands-list">
+                    {brands.map((b) => (
+                      <option key={b.id} value={b.name} />
+                    ))}
+                  </datalist>
                 </div>
 
                 <div>
@@ -981,7 +1057,10 @@ export default function AdminInventoryPage() {
                   </label>
                   <select
                     value={formDealerId}
-                    onChange={(e) => setFormDealerId(e.target.value)}
+                    onChange={(e) => {
+                      setFormDealerId(e.target.value);
+                      if (e.target.value) setFormBoughtOnCredit(true);
+                    }}
                     className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-600"
                   >
                     <option value="">-- No Dealer / Direct / Customer --</option>
@@ -1006,6 +1085,29 @@ export default function AdminInventoryPage() {
                   />
                 </div>
               </div>
+
+              {/* Bought On Credit Toggle */}
+              {formDealerId && (
+                <div className="p-3.5 rounded-xl bg-amber-50/80 border border-amber-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      id="boughtOnCreditCheck"
+                      checked={formBoughtOnCredit}
+                      onChange={(e) => setFormBoughtOnCredit(e.target.checked)}
+                      className="w-4 h-4 rounded text-amber-600 focus:ring-amber-500 border-slate-300 cursor-pointer"
+                    />
+                    <label htmlFor="boughtOnCreditCheck" className="text-xs font-bold text-amber-950 cursor-pointer">
+                      Bought on Credit from Dealer (Supplier Debt)
+                    </label>
+                  </div>
+                  <span className="text-[11px] font-semibold text-amber-800">
+                    {formBoughtOnCredit
+                      ? `+₹${((parseFloat(formPurchasePrice) || 0) * (parseInt(formStockQuantity, 10) || 1)).toLocaleString("en-IN")} added to dealer credit`
+                      : "Paid immediately (No dealer debt logged)"}
+                  </span>
+                </div>
+              )}
 
               <div className="pt-2 flex items-center justify-end gap-2.5">
                 <button
@@ -1154,6 +1256,68 @@ export default function AdminInventoryPage() {
                   className="px-4 py-1.5 rounded-lg bg-blue-600 text-white text-xs font-bold"
                 >
                   Create Category
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Add Brand Modal */}
+      {isBrandModalOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-xl max-w-sm w-full overflow-hidden animate-slide-down">
+            <div className="flex items-center justify-between p-4 border-b border-slate-100">
+              <h3 className="text-sm font-black text-slate-900">Add Brand (MongoDB)</h3>
+              <button
+                onClick={() => setIsBrandModalOpen(false)}
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-700"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleAddBrand} className="p-4 space-y-3">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Brand Name *
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Lenovo, Asus, Acer, Corsair, Crucial"
+                  value={newBrandName}
+                  onChange={(e) => setNewBrandName(e.target.value)}
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 font-bold"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Country / Origin (Optional)
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. USA, Taiwan, Japan"
+                  value={newBrandOrigin}
+                  onChange={(e) => setNewBrandOrigin(e.target.value)}
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900"
+                />
+              </div>
+
+              <div className="pt-2 flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsBrandModalOpen(false)}
+                  className="px-3 py-1.5 rounded-lg border text-xs font-semibold"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-1.5 rounded-lg bg-indigo-600 text-white text-xs font-bold"
+                >
+                  Save Brand
                 </button>
               </div>
             </form>

@@ -52,15 +52,21 @@ export async function POST(req: NextRequest) {
       stockQuantity: Number(body.stockQuantity) || 1,
       dealerId: body.dealerId || undefined,
       dealerName: body.dealerName || undefined,
+      boughtOnCredit: Boolean(body.boughtOnCredit),
       location: body.location || "",
       notes: body.notes || "",
     });
 
-    if (body.dealerId && Number(body.purchasePrice) > 0) {
+    if (body.dealerId && Number(body.purchasePrice) > 0 && body.boughtOnCredit) {
       try {
         const { recordDealerPurchase } = await import("@/lib/dealersDb");
         const totalPurchaseValue = (Number(body.purchasePrice) || 0) * (Number(body.stockQuantity) || 1);
-        await recordDealerPurchase(body.dealerId, totalPurchaseValue);
+        await recordDealerPurchase(body.dealerId, totalPurchaseValue, {
+          description: `Stock on Credit: ${item.name} (${item.code}) x${item.stockQuantity}`,
+          itemId: item.id,
+          itemCode: item.code,
+          referenceNumber: item.code,
+        });
       } catch (dealerErr) {
         console.error("Failed to update dealer purchase balance:", dealerErr);
       }

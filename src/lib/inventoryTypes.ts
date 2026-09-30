@@ -45,6 +45,7 @@ export interface InventoryItem {
   allocatedRecords: StockAllocationRecord[]; // Audit trail: which customer/invoice holds each allocated unit
   dealerId?: string; // Linked dealer / supplier ID
   dealerName?: string; // Linked dealer name
+  boughtOnCredit?: boolean; // Whether stock was procured on credit (supplier debt)
   location?: string; // Shelf / Rack (e.g. "Rack A-2")
   notes?: string;
   createdAt: Date;

@@ -57,7 +57,12 @@ export async function POST(req: NextRequest) {
     if (body.dealerId && body.type === "debit") {
       try {
         const { recordDealerPayment } = await import("@/lib/dealersDb");
-        await recordDealerPayment(body.dealerId, Number(body.amount));
+        await recordDealerPayment(body.dealerId, Number(body.amount), {
+          paymentMode: body.paymentMode,
+          referenceNumber: body.referenceNumber,
+          description: body.reason || `Payment to dealer: ${body.dealerName || body.dealerId}`,
+          date: body.date,
+        });
       } catch (dealerErr) {
         console.error("Failed to update dealer balance:", dealerErr);
       }
