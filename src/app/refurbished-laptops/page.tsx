@@ -9,6 +9,9 @@ export const metadata = {
     "Buy quality-tested refurbished laptops from Dell, HP, Lenovo & Apple. 100% functional, verified specs, 6-month warranty and free PAN India delivery.",
 };
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 export default async function RefurbishedLaptopsPage() {
   const products = await getAllProducts();
 

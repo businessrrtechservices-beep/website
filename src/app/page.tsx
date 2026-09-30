@@ -7,9 +7,16 @@ import Testimonials from "@/components/Testimonials";
 import CtaBanner from "@/components/CtaBanner";
 import Footer from "@/components/Footer";
 import { getHeroConfig } from "@/lib/heroDb";
+import { getAllProducts } from "@/lib/productsDb";
+
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 export default async function Home() {
-  const heroConfig = await getHeroConfig();
+  const [heroConfig, products] = await Promise.all([
+    getHeroConfig(),
+    getAllProducts(),
+  ]);
 
   return (
     <>
@@ -17,7 +24,7 @@ export default async function Home() {
       <main className="flex-1">
         <Hero initialConfig={heroConfig} />
         <CategoryStrip />
-        <FeaturedProducts />
+        <FeaturedProducts initialProducts={products} />
         <TrustStrip />
         <Testimonials />
         <CtaBanner />

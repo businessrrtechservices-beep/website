@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Product, priceRanges } from "@/lib/productTypes";
 import ProductCard from "./ProductCard";
 
 export default function RefurbishedListing({ initialProducts = [] }: { initialProducts?: Product[] } = {}) {
+  const [productList, setProductList] = useState<Product[]>(initialProducts);
   const [selectedBrands, setSelectedBrands] = useState<string[]>([]);
   const [selectedConditions, setSelectedConditions] = useState<string[]>([]);
   const [priceRange, setPriceRange] = useState<{ min: number; max: number } | null>(null);
@@ -12,7 +13,20 @@ export default function RefurbishedListing({ initialProducts = [] }: { initialPr
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [showFilters, setShowFilters] = useState(false);
 
-  const productList = initialProducts || [];
+  useEffect(() => {
+    if (initialProducts && initialProducts.length > 0) {
+      setProductList(initialProducts);
+    } else {
+      fetch("/api/products")
+        .then((res) => res.json())
+        .then((data) => {
+          if (data.products?.length > 0) {
+            setProductList(data.products);
+          }
+        })
+        .catch(console.error);
+    }
+  }, [initialProducts]);
 
   // Dynamically extract brands and conditions directly from active database products
   const availableBrands = useMemo(() => {

@@ -1,15 +1,39 @@
-import { getAllProducts } from "@/lib/productsDb";
+"use client";
+
+import { useState, useEffect } from "react";
 import ProductCard from "./ProductCard";
 import { ArrowRight } from "lucide-react";
+import { Product } from "@/lib/productTypes";
 
 const PHONE = "9209095278";
 const WA_HREF = `https://wa.me/91${PHONE}?text=${encodeURIComponent(
   "Hi RR Tech Services, I'd like to enquire about refurbished laptops. Please share available models and pricing."
 )}`;
 
-export default async function FeaturedProducts() {
-  const allProducts = await getAllProducts();
-  const featured = allProducts.slice(0, 4);
+export default function FeaturedProducts({
+  initialProducts = [],
+}: {
+  initialProducts?: Product[];
+} = {}) {
+  const [products, setProducts] = useState<Product[]>(initialProducts);
+
+  useEffect(() => {
+    if (initialProducts && initialProducts.length > 0) {
+      setProducts(initialProducts);
+    } else {
+      // Fallback fetch if initialProducts is empty (e.g. stale SSG build or CDN cache)
+      fetch("/api/products")
+        .then((res) => res.json())
+        .then((data) => {
+          if (data.products?.length > 0) {
+            setProducts(data.products);
+          }
+        })
+        .catch(console.error);
+    }
+  }, [initialProducts]);
+
+  const featured = products.slice(0, 4);
 
   return (
     <section
