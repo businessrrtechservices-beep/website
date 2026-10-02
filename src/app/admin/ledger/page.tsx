@@ -27,6 +27,8 @@ import {
   Check,
   ExternalLink,
   Eye,
+  Pencil,
+  Edit3,
 } from "lucide-react";
 import { WalletTransaction, WalletSummary, PaymentMode, TransactionType } from "@/lib/ledgerTypes";
 import { Dealer } from "@/lib/dealerTypes";
@@ -43,6 +45,7 @@ export default function AdminLedgerPage() {
   });
   const [transactions, setTransactions] = useState<WalletTransaction[]>([]);
   const [dealers, setDealers] = useState<Dealer[]>([]);
+  const [invoices, setInvoices] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [filterType, setFilterType] = useState<"all" | "credit" | "debit">("all");
   const [search, setSearch] = useState("");
@@ -59,7 +62,25 @@ export default function AdminLedgerPage() {
   const [formRef, setFormRef] = useState("");
   const [formDate, setFormDate] = useState(() => getISTDateTimeLocal());
   const [formProofUrl, setFormProofUrl] = useState("");
+  const [formInvoiceId, setFormInvoiceId] = useState("");
+  const [formInvoiceNumber, setFormInvoiceNumber] = useState("");
   const [uploadingProof, setUploadingProof] = useState(false);
+
+  // Edit Transaction Modal State
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editingTx, setEditingTx] = useState<WalletTransaction | null>(null);
+  const [editAmount, setEditAmount] = useState("");
+  const [editPaymentMode, setEditPaymentMode] = useState<PaymentMode>("Cash");
+  const [editCategory, setEditCategory] = useState("Office Expense");
+  const [editReason, setEditReason] = useState("");
+  const [editRef, setEditRef] = useState("");
+  const [editDate, setEditDate] = useState("");
+  const [editInvoiceId, setEditInvoiceId] = useState("");
+  const [editInvoiceNumber, setEditInvoiceNumber] = useState("");
+  const [editProofUrl, setEditProofUrl] = useState("");
+  const [editSubmitting, setEditSubmitting] = useState(false);
+  const [editUploadingProof, setEditUploadingProof] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
 
   // Attachment preview lightbox modal
   const [activeProofLightbox, setActiveProofLightbox] = useState<string | null>(null);
@@ -122,10 +143,23 @@ export default function AdminLedgerPage() {
     }
   };
 
+  const fetchInvoices = async () => {
+    try {
+      const res = await fetch("/api/sales?limit=100");
+      if (res.ok) {
+        const data = await res.json();
+        setInvoices(data.invoices || []);
+      }
+    } catch (err) {
+      console.error("Failed to load invoices for linking:", err);
+    }
+  };
+
   useEffect(() => {
     fetchLedger();
     fetchDealers();
     fetchPartnerWallets();
+    fetchInvoices();
   }, [filterType]);
 
   const handleSearchSubmit = (e: React.FormEvent) => {
@@ -161,6 +195,105 @@ export default function AdminLedgerPage() {
       setError(err?.message || "Failed to upload proof");
     } finally {
       setUploadingProof(false);
+    }
+  };
+
+  const openEditModal = (tx: WalletTransaction) => {
+    setEditingTx(tx);
+    setEditAmount(String(tx.amount || ""));
+    setEditPaymentMode(tx.paymentMode || "Cash");
+    setEditCategory(tx.category || "Office Expense");
+    setEditReason(tx.reason || "");
+    setEditRef(tx.referenceNumber || "");
+    setEditDate(
+      tx.date
+        ? tx.date.length === 10
+          ? `${tx.date}T12:00`
+          : tx.date.slice(0, 16)
+        : getISTDateTimeLocal()
+    );
+    setEditInvoiceId(tx.invoiceId || "");
+    setEditInvoiceNumber(tx.invoiceNumber || "");
+    setEditProofUrl(tx.proofUrl || "");
+    setEditError(null);
+    setIsEditModalOpen(true);
+  };
+
+  const handleEditProofUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setEditUploadingProof(true);
+    setEditError(null);
+
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("folder", "rrtechservices/ledger_proofs");
+
+      const res = await fetch("/api/upload", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!res.ok) {
+        const d = await res.json();
+        throw new Error(d.error || "Failed to upload proof to Cloudinary");
+      }
+
+      const d = await res.json();
+      setEditProofUrl(d.url);
+    } catch (err: any) {
+      setEditError(err?.message || "Failed to upload proof");
+    } finally {
+      setEditUploadingProof(false);
+    }
+  };
+
+  const handleUpdateTransaction = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingTx) return;
+    if (!editAmount || Number(editAmount) <= 0) {
+      setEditError("Please enter a valid amount greater than 0");
+      return;
+    }
+    if (!editReason.trim()) {
+      setEditError("Please enter a reason or description");
+      return;
+    }
+
+    setEditSubmitting(true);
+    setEditError(null);
+
+    try {
+      const res = await fetch(`/api/ledger/${editingTx.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          amount: parseFloat(editAmount),
+          paymentMode: editPaymentMode,
+          category: editCategory,
+          reason: editReason.trim(),
+          referenceNumber: editRef.trim(),
+          invoiceId: editInvoiceId || null,
+          invoiceNumber: editInvoiceNumber || null,
+          proofUrl: editProofUrl || null,
+          date: parseToISTIsoString(editDate),
+        }),
+      });
+
+      if (!res.ok) {
+        const d = await res.json();
+        throw new Error(d.error || "Failed to update transaction");
+      }
+
+      setIsEditModalOpen(false);
+      setEditingTx(null);
+      await fetchLedger();
+    } catch (err: any) {
+      setEditError(err?.message || "Failed to update transaction");
+    } finally {
+      setEditSubmitting(false);
     }
   };
 
@@ -273,6 +406,8 @@ export default function AdminLedgerPage() {
             referenceNumber: formRef.trim(),
             dealerId: selectedDealer?.id,
             dealerName: selectedDealer?.name,
+            invoiceId: formInvoiceId || undefined,
+            invoiceNumber: formInvoiceNumber || undefined,
             proofUrl: formProofUrl || undefined,
             date: parseToISTIsoString(formDate),
           }),
@@ -290,6 +425,8 @@ export default function AdminLedgerPage() {
       setFormReason("");
       setFormRef("");
       setFormProofUrl("");
+      setFormInvoiceId("");
+      setFormInvoiceNumber("");
       setSelectedDealerId("");
       setIsPartnerBorrowing(false);
       setIsDebitPartnerPaid(false);
@@ -552,9 +689,14 @@ export default function AdminLedgerPage() {
                       <td className="py-3.5 px-4 text-slate-900 font-semibold max-w-xs truncate">
                         {tx.reason}
                         {tx.invoiceNumber && (
-                          <span className="ml-1.5 text-[10px] bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded font-bold border border-blue-200">
-                            Inv: {tx.invoiceNumber}
-                          </span>
+                          <Link
+                            href={`/admin/sales/invoice/${tx.invoiceId || tx.invoiceNumber}`}
+                            className="ml-1.5 text-[10px] bg-blue-50 hover:bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded font-bold border border-blue-200 inline-flex items-center gap-0.5"
+                            title="View linked sales invoice"
+                          >
+                            <FileText className="w-2.5 h-2.5" />
+                            <span>Inv: {tx.invoiceNumber}</span>
+                          </Link>
                         )}
                         {tx.dealerName && (
                           <span className="ml-1.5 text-[10px] bg-indigo-50 text-indigo-700 px-1.5 py-0.5 rounded font-bold border border-indigo-200 inline-flex items-center gap-0.5">
@@ -598,13 +740,22 @@ export default function AdminLedgerPage() {
                         {isCredit ? "+" : "-"}₹{tx.amount.toLocaleString("en-IN")}
                       </td>
                       <td className="py-3.5 px-4 text-center whitespace-nowrap">
-                        <button
-                          onClick={() => handleDelete(tx.id)}
-                          className="p-1 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition cursor-pointer"
-                          title="Delete entry"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
+                        <div className="flex items-center justify-center gap-1">
+                          <button
+                            onClick={() => openEditModal(tx)}
+                            className="p-1 rounded-lg text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition cursor-pointer"
+                            title="Edit / Link to invoice"
+                          >
+                            <Pencil className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={() => handleDelete(tx.id)}
+                            className="p-1 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition cursor-pointer"
+                            title="Delete entry"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   );
@@ -1068,6 +1219,8 @@ export default function AdminLedgerPage() {
                     ) : (
                       <>
                         <option value="Stock Purchase">Stock / Accessory Purchase</option>
+                        <option value="Courier & Delivery">Courier &amp; Delivery</option>
+                        <option value="Petrol & Travel">Petrol &amp; Travel</option>
                         <option value="Spare Parts">Spare Parts (IC, Screen, SSD)</option>
                         <option value="Office Expense">Shop Rent / Electricity / Bills</option>
                         <option value="Meta & Digital Ads">Meta &amp; Digital Ads</option>
@@ -1111,11 +1264,56 @@ export default function AdminLedgerPage() {
                 <input
                   type="text"
                   required
-                  placeholder="e.g. Bought 10 Logitech M170 Wireless Mice"
+                  placeholder="e.g. Bought 10 Logitech M170 Wireless Mice / Courier delivery to customer"
                   value={formReason}
                   onChange={(e) => setFormReason(e.target.value)}
                   className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-600"
                 />
+              </div>
+
+              {/* Link to Sales Invoice (Optional) */}
+              <div className="p-3 rounded-xl bg-blue-50/70 border border-blue-200/80 space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-blue-900 uppercase tracking-wider flex items-center gap-1.5">
+                    <FileText className="w-3.5 h-3.5 text-blue-600" />
+                    <span>Link Expense to Sales Invoice (Optional)</span>
+                  </label>
+                  {formInvoiceId && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setFormInvoiceId("");
+                        setFormInvoiceNumber("");
+                      }}
+                      className="text-[10.5px] text-rose-600 hover:underline font-bold cursor-pointer"
+                    >
+                      Clear Link
+                    </button>
+                  )}
+                </div>
+                <select
+                  value={formInvoiceId}
+                  onChange={(e) => {
+                    const invId = e.target.value;
+                    setFormInvoiceId(invId);
+                    const inv = invoices.find((i) => i.id === invId);
+                    setFormInvoiceNumber(inv?.invoiceNumber || "");
+                    if (inv && !formReason.trim()) {
+                      setFormReason(`Courier/Expense for Inv ${inv.invoiceNumber} (${inv.customer?.name})`);
+                    }
+                  }}
+                  className="w-full px-3 py-2 bg-white border border-blue-200 rounded-xl text-xs font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                >
+                  <option value="">-- No linked invoice (General shop entry) --</option>
+                  {invoices.map((inv) => (
+                    <option key={inv.id} value={inv.id}>
+                      #{inv.invoiceNumber} &bull; {inv.customer?.name} &bull; ₹{inv.grandTotal?.toLocaleString("en-IN")} ({inv.date})
+                    </option>
+                  ))}
+                </select>
+                <p className="text-[10px] text-blue-700/80">
+                  Links courier, petrol, delivery or parts expense directly to this customer sales invoice.
+                </p>
               </div>
 
               {/* Reference / UTR */}
@@ -1223,6 +1421,332 @@ export default function AdminLedgerPage() {
                   </>
                 ) : (
                   <span>Record {formType === "credit" ? "Credit" : "Debit"}</span>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Transaction Modal */}
+      {isEditModalOpen && editingTx && (
+        <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 animate-in fade-in duration-150">
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-lg w-full max-h-[90vh] flex flex-col overflow-hidden animate-slide-down">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between p-4 sm:p-5 border-b border-slate-100 shrink-0 bg-white">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-xl bg-blue-50 text-blue-600">
+                  <Pencil className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-slate-900">
+                    Edit Transaction &amp; Link Invoice
+                  </h3>
+                  <p className="text-xs text-slate-500 font-medium">
+                    Update expense details or link this expense to a sales invoice
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  setIsEditModalOpen(false);
+                  setEditingTx(null);
+                }}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Scrollable Form Body */}
+            <div className="p-4 sm:p-5 overflow-y-auto flex-1 space-y-4">
+              {editError && (
+                <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-semibold">
+                  {editError}
+                </div>
+              )}
+
+              <form id="edit-transaction-form" onSubmit={handleUpdateTransaction} className="space-y-4">
+                {/* Transaction Metadata Badge */}
+                <div className="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs">
+                  <div className="flex items-center gap-2">
+                    <span className="font-bold text-slate-600">Entry Type:</span>
+                    <span
+                      className={`px-2 py-0.5 rounded-md font-black uppercase text-[10.5px] ${
+                        editingTx.type === "credit"
+                          ? "bg-emerald-100 text-emerald-800"
+                          : "bg-rose-100 text-rose-800"
+                      }`}
+                    >
+                      {editingTx.type === "credit" ? "Credit (+)" : "Debit (-)"}
+                    </span>
+                  </div>
+                  <span className="font-mono text-slate-400 text-[11px]">ID: {editingTx.id}</span>
+                </div>
+
+                {/* Amount & Mode */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                      Amount (₹) *
+                    </label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-sm">
+                        ₹
+                      </span>
+                      <input
+                        type="number"
+                        required
+                        min="1"
+                        step="any"
+                        value={editAmount}
+                        onChange={(e) => setEditAmount(e.target.value)}
+                        className="w-full pl-8 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-600"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                      Payment Mode
+                    </label>
+                    <select
+                      value={editPaymentMode}
+                      onChange={(e) => setEditPaymentMode(e.target.value as PaymentMode)}
+                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-600"
+                    >
+                      <option value="Cash">Cash</option>
+                      <option value="UPI">UPI (GPay / PhonePe / Paytm)</option>
+                      <option value="Bank Transfer">Bank Transfer (NEFT/IMPS)</option>
+                      <option value="Card">Debit / Credit Card</option>
+                      <option value="Cheque">Cheque</option>
+                      <option value="Other">Other</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* Category & Date */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                      Category
+                    </label>
+                    <select
+                      value={editCategory}
+                      onChange={(e) => setEditCategory(e.target.value)}
+                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-600"
+                    >
+                      <option value="Courier & Delivery">Courier &amp; Delivery</option>
+                      <option value="Petrol & Travel">Petrol &amp; Travel</option>
+                      <option value="Office Expense">Shop / Office Expense</option>
+                      <option value="Spare Parts">Spare Parts &amp; Repairs</option>
+                      <option value="Stock Purchase">Stock / Accessory Purchase</option>
+                      <option value="Meta & Digital Ads">Meta &amp; Digital Ads</option>
+                      <option value="Domains & Hosting">Domains &amp; Hosting</option>
+                      <option value="Software & Tools">Software, SaaS &amp; Tools</option>
+                      <option value="Tools & Equipment">Tools &amp; Equipment</option>
+                      <option value="Sale">Sale</option>
+                      <option value="Partner Borrowing">Partner Borrowing</option>
+                      <option value="Partner Repayment">Partner Repayment</option>
+                      <option value="Other">Other Expense</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                        Date &amp; Time (IST)
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => setEditDate(getISTDateTimeLocal())}
+                        className="text-[10px] text-blue-600 hover:text-blue-700 font-bold hover:underline cursor-pointer"
+                      >
+                        Set to Now
+                      </button>
+                    </div>
+                    <input
+                      type="datetime-local"
+                      value={editDate}
+                      onChange={(e) => setEditDate(e.target.value)}
+                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-600"
+                    />
+                  </div>
+                </div>
+
+                {/* Reason / Description */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                    Reason / Description *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={editReason}
+                    onChange={(e) => setEditReason(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-600"
+                  />
+                </div>
+
+                {/* LINK TO SALES INVOICE (KEY USER REQUIREMENT) */}
+                <div className="p-3.5 rounded-xl bg-blue-50/70 border border-blue-200 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-bold text-blue-900 uppercase tracking-wider flex items-center gap-1.5">
+                      <FileText className="w-4 h-4 text-blue-600" />
+                      <span>Linked Sales Invoice</span>
+                    </label>
+                    {editInvoiceId && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditInvoiceId("");
+                          setEditInvoiceNumber("");
+                        }}
+                        className="text-[10.5px] text-rose-600 hover:underline font-bold cursor-pointer"
+                      >
+                        Unlink Invoice
+                      </button>
+                    )}
+                  </div>
+
+                  <select
+                    value={editInvoiceId}
+                    onChange={(e) => {
+                      const invId = e.target.value;
+                      setEditInvoiceId(invId);
+                      const inv = invoices.find((i) => i.id === invId);
+                      setEditInvoiceNumber(inv?.invoiceNumber || "");
+                    }}
+                    className="w-full px-3 py-2 bg-white border border-blue-200 rounded-xl text-xs font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                  >
+                    <option value="">-- No linked sales invoice (General entry) --</option>
+                    {invoices.map((inv) => (
+                      <option key={inv.id} value={inv.id}>
+                        #{inv.invoiceNumber} &bull; {inv.customer?.name} &bull; ₹{inv.grandTotal?.toLocaleString("en-IN")} ({inv.date})
+                      </option>
+                    ))}
+                  </select>
+
+                  {editInvoiceNumber && (
+                    <div className="flex items-center justify-between text-[11px] bg-white p-2 rounded-lg border border-blue-100">
+                      <span className="text-slate-600">
+                        Currently Linked: <strong className="text-blue-700">#{editInvoiceNumber}</strong>
+                      </span>
+                      <Link
+                        href={`/admin/sales/invoice/${editInvoiceId || editInvoiceNumber}`}
+                        target="_blank"
+                        className="text-blue-600 font-bold hover:underline inline-flex items-center gap-1"
+                      >
+                        <span>View Invoice</span>
+                        <ExternalLink className="w-3 h-3" />
+                      </Link>
+                    </div>
+                  )}
+
+                  <p className="text-[10px] text-blue-700/80">
+                    Linking this debit expense connects courier, petrol, or repair costs directly to this invoice for real net profit calculations.
+                  </p>
+                </div>
+
+                {/* Reference / UTR */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                    Reference / UTR / Cheque No. (Optional)
+                  </label>
+                  <input
+                    type="text"
+                    value={editRef}
+                    onChange={(e) => setEditRef(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-600"
+                  />
+                </div>
+
+                {/* Attachment / Proof Upload */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                    Proof / Receipt (Cloudinary)
+                  </label>
+                  {editProofUrl ? (
+                    <div className="flex items-center gap-3 p-2.5 rounded-xl bg-slate-50 border border-slate-200">
+                      <img
+                        src={editProofUrl}
+                        alt="Uploaded proof"
+                        className="w-12 h-12 rounded-lg object-cover border border-slate-300"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <span className="text-xs font-bold text-emerald-700 block truncate flex items-center gap-1">
+                          <Check className="w-3.5 h-3.5" /> Proof Attached
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setActiveProofLightbox(editProofUrl)}
+                          className="text-[11px] text-blue-600 hover:underline block truncate font-semibold cursor-pointer"
+                        >
+                          Preview full image &rarr;
+                        </button>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setEditProofUrl("")}
+                        className="p-1 rounded-lg text-slate-400 hover:text-rose-600 transition cursor-pointer"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ) : (
+                    <label className="flex items-center justify-center gap-2 p-3 rounded-xl border-2 border-dashed border-slate-300 hover:border-blue-400 bg-slate-50 hover:bg-blue-50/40 text-slate-600 cursor-pointer transition">
+                      {editUploadingProof ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin text-blue-600" />
+                          <span className="text-xs font-semibold text-blue-600">Uploading to Cloudinary...</span>
+                        </>
+                      ) : (
+                        <>
+                          <UploadCloud className="w-4 h-4 text-slate-400" />
+                          <span className="text-xs font-medium">Upload receipt / bill proof</span>
+                        </>
+                      )}
+                      <input
+                        type="file"
+                        accept="image/*,.pdf"
+                        onChange={handleEditProofUpload}
+                        disabled={editUploadingProof}
+                        className="hidden"
+                      />
+                    </label>
+                  )}
+                </div>
+              </form>
+            </div>
+
+            {/* Modal Sticky Footer */}
+            <div className="p-4 sm:p-5 border-t border-slate-100 bg-slate-50 flex items-center justify-end gap-2.5 shrink-0">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsEditModalOpen(false);
+                  setEditingTx(null);
+                }}
+                className="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-200 transition cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                form="edit-transaction-form"
+                disabled={editSubmitting || editUploadingProof}
+                className="inline-flex items-center gap-1.5 px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-xs transition cursor-pointer disabled:opacity-50"
+              >
+                {editSubmitting ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    <span>Saving Changes...</span>
+                  </>
+                ) : (
+                  <>
+                    <Check className="w-3.5 h-3.5" />
+                    <span>Save Changes</span>
+                  </>
                 )}
               </button>
             </div>

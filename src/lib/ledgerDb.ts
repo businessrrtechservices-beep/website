@@ -159,3 +159,39 @@ export async function deleteTransaction(id: string): Promise<boolean> {
   const result = await collection.deleteOne({ $or: [{ id }, { _id: id } as any] });
   return result.deletedCount > 0;
 }
+
+/**
+ * Update an existing transaction by ID
+ */
+export async function updateTransaction(
+  id: string,
+  updates: Partial<WalletTransaction>
+): Promise<WalletTransaction | null> {
+  const db = await getMongoDb();
+  const collection = db.collection<any>(COLLECTION_NAME);
+
+  const cleanUpdates: any = { ...updates };
+  delete cleanUpdates.id;
+  delete cleanUpdates._id;
+  delete cleanUpdates.createdAt;
+
+  if (cleanUpdates.amount !== undefined) {
+    cleanUpdates.amount = Number(cleanUpdates.amount) || 0;
+  }
+  if (cleanUpdates.date) {
+    cleanUpdates.date = parseToISTIsoString(cleanUpdates.date);
+  }
+
+  const result = await collection.findOneAndUpdate(
+    { $or: [{ id }, { _id: id } as any] },
+    { $set: cleanUpdates },
+    { returnDocument: "after" }
+  );
+
+  if (!result) return null;
+  const { _id, ...rest } = result;
+  return {
+    ...rest,
+    id: rest.id || _id?.toString(),
+  };
+}

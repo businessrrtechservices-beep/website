@@ -35,6 +35,9 @@ import {
   CreditCard,
 } from "lucide-react";
 
+import RevenueProfitCards from "@/components/RevenueProfitCards";
+import { RevenueProfitDashboardData } from "@/lib/revenueProfitDb";
+
 export default function AdminDashboardPage() {
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState<any>(null);
@@ -44,6 +47,7 @@ export default function AdminDashboardPage() {
   const [totalSalesRevenue, setTotalSalesRevenue] = useState(0);
   const [stockItemCount, setStockItemCount] = useState(0);
   const [totalCompanyExpenses, setTotalCompanyExpenses] = useState(0);
+  const [revenueData, setRevenueData] = useState<RevenueProfitDashboardData | null>(null);
 
   // Sales and Invoices Status Lifecycle State
   const [salesInvoices, setSalesInvoices] = useState<any[]>([]);
@@ -76,7 +80,7 @@ export default function AdminDashboardPage() {
   const fetchDashboardData = async () => {
     setLoading(true);
     try {
-      const [analyticsRes, heroRes, productsRes, ledgerRes, salesRes, inventoryRes, borrowingRes, expensesRes] = await Promise.all([
+      const [analyticsRes, heroRes, productsRes, ledgerRes, salesRes, inventoryRes, borrowingRes, expensesRes, revenueProfitRes] = await Promise.all([
         fetch("/api/analytics/stats"),
         fetch("/api/hero"),
         fetch("/api/products"),
@@ -85,6 +89,7 @@ export default function AdminDashboardPage() {
         fetch("/api/inventory/items"),
         fetch("/api/borrowing"),
         fetch("/api/expenses"),
+        fetch("/api/analytics/revenue-profit"),
       ]);
 
       if (analyticsRes.ok) {
@@ -120,6 +125,10 @@ export default function AdminDashboardPage() {
       if (expensesRes.ok) {
         const data = await expensesRes.json();
         setTotalCompanyExpenses(data.summary?.totalExpense || 0);
+      }
+      if (revenueProfitRes.ok) {
+        const data = await revenueProfitRes.json();
+        setRevenueData(data);
       }
     } catch (err) {
       console.error("Dashboard data load error:", err);
@@ -940,6 +949,9 @@ export default function AdminDashboardPage() {
           </div>
         </div>
       </div>
+
+      {/* Real Revenue & Net Profit: 4 Cards (Today, This Week, This Month, Overall) */}
+      <RevenueProfitCards data={revenueData} loading={loading} />
 
       {/* Collect Payment Modal Dialog */}
       {collectModalInvoice && (

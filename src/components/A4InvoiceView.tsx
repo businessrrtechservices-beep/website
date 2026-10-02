@@ -117,15 +117,10 @@ export default function A4InvoiceView({ invoice }: A4InvoiceViewProps) {
                 </div>
               </div>
               <div className="text-[10.5px] text-slate-700 pt-1 space-y-0.5">
-                <p>Shop No. 12, Cyber Hub, MG Road, Pune, Maharashtra - 411001</p>
+                <p>Aman Colony, Handewadi Road, Near Taurus Fitness, Pune, Maharashtra - 411028</p>
                 <p className="flex gap-4">
                   <span>Phone: <strong className="text-slate-900">+91 9209095278</strong></span>
                   <span>Email: <strong className="text-slate-900">business.rrtechservices@gmail.com</strong></span>
-                </p>
-                <p className="flex gap-4 font-mono text-[10px] text-slate-600 pt-0.5">
-                  <span>GSTIN: <strong className="text-slate-900">27ABCDE1234F1Z5</strong></span>
-                  <span>PAN: <strong className="text-slate-900">ABCDE1234F</strong></span>
-                  <span>State: <strong className="text-slate-900">Maharashtra (27)</strong></span>
                 </p>
               </div>
             </div>
@@ -135,7 +130,7 @@ export default function A4InvoiceView({ invoice }: A4InvoiceViewProps) {
               <div className="flex items-start justify-between">
                 <div>
                   <span className="text-[12px] font-black uppercase tracking-wider text-slate-900 block">
-                    TAX INVOICE
+                    INVOICE
                   </span>
                   <span className="text-[9.5px] text-slate-500 uppercase tracking-wide">
                     Original for Recipient
@@ -205,19 +200,21 @@ export default function A4InvoiceView({ invoice }: A4InvoiceViewProps) {
               )}
             </div>
 
-            {/* Place of Supply / Payment Overview */}
+            {/* Payment Overview */}
             <div className="col-span-5 p-2.5 bg-slate-50/50 flex flex-col justify-between text-[10.5px]">
               <div>
                 <span className="text-[9.5px] font-black uppercase tracking-wider text-slate-500 block">
-                  Supply &amp; Dispatch Details:
+                  Payment Summary:
                 </span>
                 <div className="flex justify-between py-0.5">
-                  <span className="text-slate-600">Place of Supply:</span>
-                  <span className="font-bold text-slate-900">Maharashtra (27)</span>
+                  <span className="text-slate-600">Payment Status:</span>
+                  <span className={`font-bold uppercase ${isPaid ? "text-emerald-700" : isPartial ? "text-amber-700" : "text-rose-700"}`}>
+                    {invoice.paymentStatus}
+                  </span>
                 </div>
                 <div className="flex justify-between py-0.5">
-                  <span className="text-slate-600">Reverse Charge:</span>
-                  <span className="font-bold text-slate-900">No</span>
+                  <span className="text-slate-600">Payment Method:</span>
+                  <span className="font-bold text-slate-900 uppercase">{invoice.paymentMode || "UPI / Cash"}</span>
                 </div>
               </div>
               <div className="border-t border-slate-200 pt-1 flex justify-between items-baseline">
@@ -412,7 +409,6 @@ export default function A4InvoiceView({ invoice }: A4InvoiceViewProps) {
             </span>
             <p>1. Warranty on refurbished laptops/hardware strictly per RR Tech invoice terms; physical damage or seal tampering voids warranty.</p>
             <p>2. Goods once verified and delivered cannot be returned without original invoice copy and technical review.</p>
-            <p>3. All payment disputes are subject to Pune jurisdiction only.</p>
             {invoice.notes && (
               <p className="text-blue-900 font-semibold pt-0.5">Remark: {invoice.notes}</p>
             )}
@@ -429,8 +425,8 @@ export default function A4InvoiceView({ invoice }: A4InvoiceViewProps) {
         </div>
 
         <div className="bg-slate-100 border-t border-slate-900 px-2.5 py-1 flex justify-between text-[8.5px] text-slate-500 font-mono">
-          <span>This is a computer-generated tax invoice.</span>
-          <span>RR Tech Services &bull; GSTIN: 27ABCDE1234F1Z5 &bull; Pune Cyber Hub</span>
+          <span>This is a computer-generated sales invoice.</span>
+          <span>RR Tech Services &bull; Aman Colony, Handewadi Rd, Pune 411028</span>
         </div>
       </div>
     </div>

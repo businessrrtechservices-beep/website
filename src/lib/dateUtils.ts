@@ -140,3 +140,36 @@ export function formatISTTime(dateInput?: string | Date | null): string {
     hour12: true,
   });
 }
+
+/**
+ * Returns current Monday to Sunday date range strings (YYYY-MM-DD) in IST
+ */
+export function getISTWeekRange(d: Date = new Date()): { start: string; end: string } {
+  const todayStr = getISTDateString(d);
+  const [y, m, day] = todayStr.split("-").map(Number);
+  const curr = new Date(Date.UTC(y, m - 1, day));
+  const dayOfWeek = curr.getUTCDay(); // 0 = Sun, 1 = Mon ...
+  const diffToMonday = (dayOfWeek + 6) % 7;
+  const monday = new Date(curr.getTime() - diffToMonday * 86400000);
+  const sunday = new Date(monday.getTime() + 6 * 86400000);
+  const fmt = (dt: Date) => dt.toISOString().slice(0, 10);
+  return {
+    start: fmt(monday),
+    end: fmt(sunday),
+  };
+}
+
+/**
+ * Returns current month date range (YYYY-MM-01 to end of month) in IST
+ */
+export function getISTMonthRange(d: Date = new Date()): { start: string; end: string; monthStr: string } {
+  const todayStr = getISTDateString(d);
+  const monthStr = todayStr.slice(0, 7);
+  const [y, m] = monthStr.split("-").map(Number);
+  const lastDay = new Date(Date.UTC(y, m, 0)).getUTCDate();
+  return {
+    start: `${monthStr}-01`,
+    end: `${monthStr}-${String(lastDay).padStart(2, "0")}`,
+    monthStr,
+  };
+}
