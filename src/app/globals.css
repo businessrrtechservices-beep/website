@@ -132,12 +132,15 @@ body::-webkit-scrollbar {
 /* Print Styles for Invoices */
 @media print {
   @page {
-    size: A4;
-    margin: 12mm;
+    size: A4 portrait;
+    margin: 8mm;
   }
-  body {
+  html, body {
     background: #ffffff !important;
     color: #000000 !important;
+    font-size: 11pt !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
   }
   body * {
     visibility: hidden;
@@ -152,9 +155,14 @@ body::-webkit-scrollbar {
     top: 0;
     width: 100% !important;
     max-width: 100% !important;
+    min-height: 0 !important;
     margin: 0 !important;
     padding: 0 !important;
     border: none !important;
     box-shadow: none !important;
+    page-break-inside: avoid;
+  }
+  table, tr, td, th {
+    page-break-inside: avoid !important;
   }
 }

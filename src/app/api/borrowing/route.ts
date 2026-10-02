@@ -25,16 +25,30 @@ export async function GET(req: NextRequest) {
       (acc, w) => acc + (w.currentBorrowedBalance || 0),
       0
     );
+    const totalActiveInvestment = wallets.reduce(
+      (acc, w) => acc + (w.currentInvestedBalance || 0),
+      0
+    );
+    const totalNetExposure = totalOutstanding + totalActiveInvestment;
     const totalBorrowedAll = wallets.reduce((acc, w) => acc + (w.totalBorrowed || 0), 0);
     const totalRepaidAll = wallets.reduce((acc, w) => acc + (w.totalRepaid || 0), 0);
+    const totalInvestedAll = wallets.reduce((acc, w) => acc + (w.totalInvested || 0), 0);
+    const totalInvestmentWithdrawnAll = wallets.reduce(
+      (acc, w) => acc + (w.totalInvestmentWithdrawn || 0),
+      0
+    );
 
     return NextResponse.json({
       wallets,
       transactions,
       summary: {
         totalOutstanding,
+        totalActiveInvestment,
+        totalNetExposure,
         totalBorrowedAll,
         totalRepaidAll,
+        totalInvestedAll,
+        totalInvestmentWithdrawnAll,
       },
     });
   } catch (error: any) {
@@ -67,7 +81,7 @@ export async function POST(req: NextRequest) {
 
     if (!body.partnerId || !body.type || !body.amount) {
       return NextResponse.json(
-        { error: "Partner ID, type (borrow/repayment), and amount are required" },
+        { error: "Partner ID, transaction type, and amount are required" },
         { status: 400 }
       );
     }
@@ -80,6 +94,9 @@ export async function POST(req: NextRequest) {
       date: body.date,
       reason: body.reason,
       referenceNumber: body.referenceNumber,
+      proofUrl: body.proofUrl || undefined,
+      proofPublicId: body.proofPublicId || undefined,
+      linkedTxId: body.linkedTxId || undefined,
       syncMainLedger: body.syncMainLedger !== false,
     });
 

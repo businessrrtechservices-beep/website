@@ -95,6 +95,8 @@ export async function createInvoice(
       category: "Sale",
       reason: `Invoice ${newInvoice.invoiceNumber} - ${newInvoice.customer.name} (${itemsDescription})`,
       referenceNumber: newInvoice.invoiceNumber,
+      proofUrl: newInvoice.proofUrl,
+      proofPublicId: newInvoice.proofPublicId,
       date: newInvoice.date,
       invoiceId: newInvoice.id,
       invoiceNumber: newInvoice.invoiceNumber,
@@ -157,6 +159,92 @@ export async function getInvoiceById(id: string): Promise<Invoice | null> {
   } catch {
     return null;
   }
+}
+
+/**
+ * Record a payment against an invoice (settlement lifecycle):
+ * 1. Updates amountPaid and balanceDue
+ * 2. Re-evaluates paymentStatus: Paid if balanceDue <= 0, else Partial
+ * 3. Adds payment to paymentHistory
+ * 4. Auto-credits the payment to main wallet ledger
+ */
+export async function recordInvoicePayment(
+  invoiceId: string,
+  payment: {
+    amount: number;
+    paymentMode: any;
+    referenceNumber?: string;
+    proofUrl?: string;
+    proofPublicId?: string;
+    date?: string;
+    notes?: string;
+  }
+): Promise<Invoice | null> {
+  const db = await getMongoDb();
+  const collection = db.collection<any>(COLLECTION_NAME);
+
+  const invoice = await collection.findOne({
+    $or: [{ id: invoiceId }, { _id: invoiceId } as any, { invoiceNumber: invoiceId }],
+  });
+  if (!invoice) return null;
+
+  const paymentAmount = Number(payment.amount) || 0;
+  if (paymentAmount <= 0) throw new Error("Payment amount must be greater than zero");
+
+  const currentPaid = Number(invoice.amountPaid) || 0;
+  const grandTotal = Number(invoice.grandTotal) || 0;
+  const newAmountPaid = currentPaid + paymentAmount;
+  const newBalanceDue = Math.max(0, grandTotal - newAmountPaid);
+  const newPaymentStatus = newBalanceDue === 0 ? "Paid" : "Partial";
+
+  const paymentRecord = {
+    id: `PMT-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+    amount: paymentAmount,
+    date: payment.date || new Date().toISOString().substring(0, 10),
+    paymentMode: payment.paymentMode || "Cash",
+    referenceNumber: payment.referenceNumber || "",
+    proofUrl: payment.proofUrl,
+    notes: payment.notes || "",
+    createdAt: new Date(),
+  };
+
+  const updateDoc: any = {
+    $set: {
+      amountPaid: newAmountPaid,
+      balanceDue: newBalanceDue,
+      paymentStatus: newPaymentStatus,
+      updatedAt: new Date(),
+    },
+    $push: {
+      paymentHistory: paymentRecord,
+    },
+  };
+
+  if (payment.proofUrl && !invoice.proofUrl) {
+    updateDoc.$set.proofUrl = payment.proofUrl;
+    updateDoc.$set.proofPublicId = payment.proofPublicId;
+  }
+
+  await collection.updateOne({ _id: invoice._id }, updateDoc);
+
+  // Auto-credit payment into main wallet ledger
+  await createTransaction({
+    type: "credit",
+    amount: paymentAmount,
+    paymentMode: payment.paymentMode || "Cash",
+    category: "Sale",
+    reason: `Payment received for Invoice ${invoice.invoiceNumber} - ${invoice.customer.name}${
+      payment.notes ? ` (${payment.notes})` : ""
+    }`,
+    referenceNumber: payment.referenceNumber || invoice.invoiceNumber,
+    proofUrl: payment.proofUrl,
+    proofPublicId: payment.proofPublicId,
+    date: payment.date || new Date().toISOString().substring(0, 10),
+    invoiceId: invoice.id,
+    invoiceNumber: invoice.invoiceNumber,
+  });
+
+  return getInvoiceById(invoice.id);
 }
 
 export async function deleteInvoice(id: string): Promise<boolean> {

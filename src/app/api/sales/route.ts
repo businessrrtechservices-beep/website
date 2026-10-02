@@ -76,6 +76,8 @@ export async function POST(req: NextRequest) {
       paymentMode: body.paymentMode || "Cash",
       amountPaid: Number(body.amountPaid) || 0,
       balanceDue: Number(body.balanceDue) || 0,
+      proofUrl: body.proofUrl || undefined,
+      proofPublicId: body.proofPublicId || undefined,
       notes: body.notes || "",
       termsAndConditions: body.termsAndConditions || "Warranty valid as per brand policy. Goods once sold are not returnable without inspection.",
       recordedInLedger: body.recordedInLedger !== false,

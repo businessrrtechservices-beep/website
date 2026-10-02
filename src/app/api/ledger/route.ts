@@ -48,6 +48,8 @@ export async function POST(req: NextRequest) {
       category: body.category || "General",
       reason: body.reason,
       referenceNumber: body.referenceNumber || "",
+      proofUrl: body.proofUrl || undefined,
+      proofPublicId: body.proofPublicId || undefined,
       date: parseToISTIsoString(body.date),
       invoiceId: body.invoiceId,
       invoiceNumber: body.invoiceNumber,

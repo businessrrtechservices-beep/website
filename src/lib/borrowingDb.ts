@@ -16,13 +16,21 @@ export async function getPartnerWallets(): Promise<PartnerWallet[]> {
     const collection = db.collection<any>(WALLETS_COLLECTION);
 
     const items = await collection.find({}).sort({ createdAt: 1 }).toArray();
-    return items.map(({ _id, ...rest }) => ({
-      ...rest,
-      id: rest.id || _id.toString(),
-      currentBorrowedBalance: rest.currentBorrowedBalance || 0,
-      totalBorrowed: rest.totalBorrowed || 0,
-      totalRepaid: rest.totalRepaid || 0,
-    }));
+    return items.map(({ _id, ...rest }) => {
+      const currentBorrowedBalance = Number(rest.currentBorrowedBalance) || 0;
+      const currentInvestedBalance = Number(rest.currentInvestedBalance) || 0;
+      return {
+        ...rest,
+        id: rest.id || _id.toString(),
+        currentBorrowedBalance,
+        totalBorrowed: Number(rest.totalBorrowed) || 0,
+        totalRepaid: Number(rest.totalRepaid) || 0,
+        currentInvestedBalance,
+        totalInvested: Number(rest.totalInvested) || 0,
+        totalInvestmentWithdrawn: Number(rest.totalInvestmentWithdrawn) || 0,
+        totalNetContribution: currentBorrowedBalance + currentInvestedBalance,
+      };
+    });
   } catch (error) {
     console.error("Error fetching partner wallets from Cloud MongoDB:", error);
     return [];
@@ -46,6 +54,10 @@ export async function createPartnerWallet(data: {
     currentBorrowedBalance: 0,
     totalBorrowed: 0,
     totalRepaid: 0,
+    currentInvestedBalance: 0,
+    totalInvested: 0,
+    totalInvestmentWithdrawn: 0,
+    totalNetContribution: 0,
     createdAt: new Date(),
     updatedAt: new Date(),
   };
@@ -62,13 +74,19 @@ export async function deletePartnerWallet(id: string): Promise<boolean> {
 }
 
 /**
- * Record a borrow or repayment transaction:
- * - If borrow:
- *   - Partner wallet borrowed balance increases (+amount)
- *   - Main wallet receives CREDIT (+amount)
- * - If repayment:
- *   - Partner wallet borrowed balance decreases (-amount)
- *   - Main wallet records DEBIT (-amount)
+ * Record a borrow, repayment, investment, or adjustment transaction:
+ * - borrow: partner borrowed balance increases (+amount), main wallet credited (+amount)
+ * - repayment: partner borrowed balance decreases (-amount), main wallet debited (-amount)
+ * - investment: partner invested balance increases (+amount), main wallet credited (+amount)
+ * - investment_withdrawal: partner invested balance decreases (-amount), main wallet debited (-amount)
+ * - borrow_to_investment (Adjustment):
+ *     borrowed balance decreases (-amount),
+ *     invested balance increases (+amount),
+ *     main wallet balance is UNCHANGED ("wallet same", because capital already exists in shop)
+ * - investment_to_borrow (Adjustment):
+ *     invested balance decreases (-amount),
+ *     borrowed balance increases (+amount),
+ *     main wallet balance is UNCHANGED
  */
 export async function recordPartnerTransaction(data: {
   partnerId: string;
@@ -78,6 +96,9 @@ export async function recordPartnerTransaction(data: {
   date?: string;
   reason?: string;
   referenceNumber?: string;
+  proofUrl?: string;
+  proofPublicId?: string;
+  linkedTxId?: string;
   syncMainLedger?: boolean;
 }): Promise<BorrowingTransaction> {
   const db = await getMongoDb();
@@ -90,53 +111,133 @@ export async function recordPartnerTransaction(data: {
   const amount = Number(data.amount) || 0;
   const txDate = data.date ? parseToISTIsoString(data.date) : getNowISTIsoString();
 
-  // 2. Sync with Main Wallet Ledger if requested (default true)
+  // 2. Sync with Main Wallet Ledger if requested and if not a pure reclassification adjustment
   let mainLedgerTxId: string | undefined = undefined;
-  if (data.syncMainLedger !== false) {
-    const isBorrow = data.type === "borrow";
+  const isAdjustment = data.type === "borrow_to_investment" || data.type === "investment_to_borrow";
+
+  if (data.syncMainLedger !== false && !isAdjustment) {
+    let ledgerType: "credit" | "debit" = "credit";
+    let ledgerCategory = "Partner Borrowing";
+    let defaultReason = "";
+
+    switch (data.type) {
+      case "borrow":
+        ledgerType = "credit";
+        ledgerCategory = "Partner Borrowing";
+        defaultReason = `Borrowed from ${partnerName}`;
+        break;
+      case "repayment":
+        ledgerType = "debit";
+        ledgerCategory = "Partner Repayment";
+        defaultReason = `Repaid to ${partnerName}`;
+        break;
+      case "investment":
+        ledgerType = "credit";
+        ledgerCategory = "Partner Investment";
+        defaultReason = `Capital investment from ${partnerName}`;
+        break;
+      case "investment_withdrawal":
+        ledgerType = "debit";
+        ledgerCategory = "Owner Withdrawal";
+        defaultReason = `Capital withdrawal by ${partnerName}`;
+        break;
+    }
+
     const mainTx = await createTransaction({
-      type: isBorrow ? "credit" : "debit",
+      type: ledgerType,
       amount,
       paymentMode: data.paymentMode || "Cash",
-      category: isBorrow ? "Partner Borrowing" : "Partner Repayment",
-      reason: isBorrow
-        ? `Borrowed from ${partnerName}${data.reason ? `: ${data.reason}` : ""}`
-        : `Repaid to ${partnerName}${data.reason ? `: ${data.reason}` : ""}`,
+      category: ledgerCategory,
+      reason: data.reason ? `${defaultReason}: ${data.reason}` : defaultReason,
       referenceNumber: data.referenceNumber || "",
+      proofUrl: data.proofUrl,
+      proofPublicId: data.proofPublicId,
       date: txDate,
     });
     mainLedgerTxId = mainTx.id;
   }
 
-  // 3. Create borrowing transaction
+  // Determine standard reason if none provided
+  let reasonText = data.reason?.trim();
+  if (!reasonText) {
+    if (data.type === "borrow") reasonText = "Capital loan borrowed";
+    else if (data.type === "repayment") reasonText = "Loan repayment";
+    else if (data.type === "investment") reasonText = "Direct equity investment";
+    else if (data.type === "investment_withdrawal") reasonText = "Capital withdrawn";
+    else if (data.type === "borrow_to_investment") reasonText = "Converted borrowing to equity investment";
+    else if (data.type === "investment_to_borrow") reasonText = "Converted equity investment to repayable loan";
+  }
+
+  // 3. Create borrowing/investment transaction record
   const newTx: BorrowingTransaction = {
-    id: `BORROW-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+    id: `PARTNER-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
     partnerId: data.partnerId,
     partnerName,
     type: data.type,
     amount,
     paymentMode: data.paymentMode,
     date: txDate,
-    reason: data.reason || (data.type === "borrow" ? "Capital borrowed" : "Loan repayment"),
+    reason: reasonText || "Partner transaction",
     referenceNumber: data.referenceNumber,
+    proofUrl: data.proofUrl,
+    proofPublicId: data.proofPublicId,
+    linkedTxId: data.linkedTxId,
     mainLedgerTxId,
     createdAt: new Date(),
   };
 
   await txCol.insertOne(newTx as any);
 
-  // 4. Update Partner Wallet balance
+  // 4. Update Partner Wallet balances in Cloud MongoDB
   const updateQuery: any = { $set: { updatedAt: new Date() } };
-  if (data.type === "borrow") {
-    updateQuery.$inc = {
-      totalBorrowed: amount,
-      currentBorrowedBalance: amount,
-    };
-  } else {
-    updateQuery.$inc = {
-      totalRepaid: amount,
-      currentBorrowedBalance: -amount,
-    };
+
+  switch (data.type) {
+    case "borrow":
+      updateQuery.$inc = {
+        totalBorrowed: amount,
+        currentBorrowedBalance: amount,
+      };
+      break;
+
+    case "repayment":
+      updateQuery.$inc = {
+        totalRepaid: amount,
+        currentBorrowedBalance: -amount,
+      };
+      break;
+
+    case "investment":
+      updateQuery.$inc = {
+        totalInvested: amount,
+        currentInvestedBalance: amount,
+      };
+      break;
+
+    case "investment_withdrawal":
+      updateQuery.$inc = {
+        totalInvestmentWithdrawn: amount,
+        currentInvestedBalance: -amount,
+      };
+      break;
+
+    case "borrow_to_investment":
+      // Reclassification: Borrow balance drops, Investment balance rises, Wallet unchanged!
+      updateQuery.$inc = {
+        totalRepaid: amount, // marks borrowed portion settled
+        currentBorrowedBalance: -amount,
+        totalInvested: amount,
+        currentInvestedBalance: amount,
+      };
+      break;
+
+    case "investment_to_borrow":
+      updateQuery.$inc = {
+        totalInvestmentWithdrawn: amount,
+        currentInvestedBalance: -amount,
+        totalBorrowed: amount,
+        currentBorrowedBalance: amount,
+      };
+      break;
   }
 
   await walletsCol.updateOne({ id: data.partnerId }, updateQuery);
@@ -145,7 +246,7 @@ export async function recordPartnerTransaction(data: {
 }
 
 /**
- * Fetch all borrowing transactions or filter by partner
+ * Fetch all partner transactions or filter by partner
  */
 export async function getBorrowingTransactions(
   partnerId?: string
@@ -171,7 +272,7 @@ export async function getBorrowingTransactions(
 }
 
 /**
- * Delete a borrowing transaction and reverse its balance impact
+ * Delete a borrowing or investment transaction and reverse its balance impact
  */
 export async function deleteBorrowingTransaction(id: string): Promise<boolean> {
   const db = await getMongoDb();
@@ -181,18 +282,54 @@ export async function deleteBorrowingTransaction(id: string): Promise<boolean> {
   const tx = await txCol.findOne({ $or: [{ id }, { _id: id } as any] });
   if (!tx) return false;
 
-  // Reverse balance in partner wallet
   const reverseQuery: any = { $set: { updatedAt: new Date() } };
-  if (tx.type === "borrow") {
-    reverseQuery.$inc = {
-      totalBorrowed: -tx.amount,
-      currentBorrowedBalance: -tx.amount,
-    };
-  } else {
-    reverseQuery.$inc = {
-      totalRepaid: -tx.amount,
-      currentBorrowedBalance: tx.amount,
-    };
+
+  switch (tx.type) {
+    case "borrow":
+      reverseQuery.$inc = {
+        totalBorrowed: -tx.amount,
+        currentBorrowedBalance: -tx.amount,
+      };
+      break;
+
+    case "repayment":
+      reverseQuery.$inc = {
+        totalRepaid: -tx.amount,
+        currentBorrowedBalance: tx.amount,
+      };
+      break;
+
+    case "investment":
+      reverseQuery.$inc = {
+        totalInvested: -tx.amount,
+        currentInvestedBalance: -tx.amount,
+      };
+      break;
+
+    case "investment_withdrawal":
+      reverseQuery.$inc = {
+        totalInvestmentWithdrawn: -tx.amount,
+        currentInvestedBalance: tx.amount,
+      };
+      break;
+
+    case "borrow_to_investment":
+      reverseQuery.$inc = {
+        totalRepaid: -tx.amount,
+        currentBorrowedBalance: tx.amount,
+        totalInvested: -tx.amount,
+        currentInvestedBalance: -tx.amount,
+      };
+      break;
+
+    case "investment_to_borrow":
+      reverseQuery.$inc = {
+        totalInvestmentWithdrawn: -tx.amount,
+        currentInvestedBalance: tx.amount,
+        totalBorrowed: -tx.amount,
+        currentBorrowedBalance: -tx.amount,
+      };
+      break;
   }
 
   await walletsCol.updateOne({ id: tx.partnerId }, reverseQuery);

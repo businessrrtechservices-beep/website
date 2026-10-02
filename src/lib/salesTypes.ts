@@ -21,6 +21,17 @@ export interface CustomerInfo {
   gstin?: string;
 }
 
+export interface InvoicePaymentRecord {
+  id: string;
+  amount: number;
+  date: string;
+  paymentMode: PaymentMode;
+  referenceNumber?: string;
+  proofUrl?: string;
+  notes?: string;
+  createdAt: Date;
+}
+
 export interface Invoice {
   id: string;
   invoiceNumber: string; // e.g. RRTS-INV-1001
@@ -39,6 +50,9 @@ export interface Invoice {
   balanceDue: number;
   notes?: string;
   termsAndConditions?: string;
+  proofUrl?: string; // Cloudinary receipt / payment proof URL
+  proofPublicId?: string;
+  paymentHistory?: InvoicePaymentRecord[];
   recordedInLedger: boolean;
   createdAt: Date;
   updatedAt: Date;

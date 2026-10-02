@@ -10,6 +10,9 @@ export type TransactionCategory =
   | "Spare Parts"
   | "Owner Withdrawal"
   | "Capital Added"
+  | "Partner Borrowing"
+  | "Partner Repayment"
+  | "Partner Investment"
   | "Other";
 
 export interface WalletTransaction {
@@ -20,6 +23,8 @@ export interface WalletTransaction {
   category: TransactionCategory | string;
   reason: string;
   referenceNumber?: string;
+  proofUrl?: string; // Cloudinary image URL for receipt / proof / cheque / screenshot
+  proofPublicId?: string;
   date: string; // ISO string or YYYY-MM-DDTHH:mm
   invoiceId?: string;
   invoiceNumber?: string;

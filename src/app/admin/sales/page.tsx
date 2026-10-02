@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Image from "next/image";
+import Link from "next/link";
 import {
   Receipt,
   Plus,
@@ -26,11 +27,16 @@ import {
   CreditCard,
   Building2,
   Boxes,
+  ExternalLink,
+  UploadCloud,
+  Check,
+  Share2,
 } from "lucide-react";
 import { Invoice, SaleItemLine, CustomerInfo } from "@/lib/salesTypes";
 import { InventoryItem } from "@/lib/inventoryTypes";
 import { PaymentMode } from "@/lib/ledgerTypes";
 import { getISTDateString, formatISTDate } from "@/lib/dateUtils";
+import A4InvoiceView from "@/components/A4InvoiceView";
 
 export default function AdminSalesPage() {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
@@ -41,6 +47,18 @@ export default function AdminSalesPage() {
     totalInvoices: 0,
     totalUnitsSold: 0,
   });
+
+  // Payment Settlement Modal State
+  const [collectModalInvoice, setCollectModalInvoice] = useState<Invoice | null>(null);
+  const [collectAmount, setCollectAmount] = useState("");
+  const [collectMode, setCollectMode] = useState<PaymentMode>("Cash");
+  const [collectRef, setCollectRef] = useState("");
+  const [collectNotes, setCollectNotes] = useState("");
+  const [collectProofUrl, setCollectProofUrl] = useState("");
+  const [uploadingCollectProof, setUploadingCollectProof] = useState(false);
+  const [collectSubmitting, setCollectSubmitting] = useState(false);
+  const [collectError, setCollectError] = useState<string | null>(null);
+
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -271,6 +289,92 @@ export default function AdminSalesPage() {
 
   const handlePrint = () => {
     window.print();
+  };
+
+  const handleOpenCollectModal = (inv: Invoice) => {
+    setCollectModalInvoice(inv);
+    setCollectAmount(inv.balanceDue > 0 ? inv.balanceDue.toString() : "");
+    setCollectMode("UPI");
+    setCollectRef("");
+    setCollectNotes("");
+    setCollectProofUrl("");
+    setCollectError(null);
+  };
+
+  const handleCollectProofUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploadingCollectProof(true);
+    setCollectError(null);
+
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("folder", "rrtechservices/sales_proofs");
+
+      const res = await fetch("/api/upload", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || "Failed to upload payment proof");
+      }
+
+      const data = await res.json();
+      setCollectProofUrl(data.url);
+    } catch (err: any) {
+      setCollectError(err.message || "Upload error");
+    } finally {
+      setUploadingCollectProof(false);
+    }
+  };
+
+  const handleRecordPayment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!collectModalInvoice) return;
+    const pmt = parseFloat(collectAmount);
+    if (!pmt || pmt <= 0) {
+      setCollectError("Please enter a valid payment amount");
+      return;
+    }
+
+    setCollectSubmitting(true);
+    setCollectError(null);
+
+    try {
+      const res = await fetch(`/api/sales/${collectModalInvoice.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "record_payment",
+          amount: pmt,
+          paymentMode: collectMode,
+          referenceNumber: collectRef.trim(),
+          proofUrl: collectProofUrl || undefined,
+          notes: collectNotes.trim(),
+        }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || "Failed to record payment");
+      }
+
+      const data = await res.json();
+      setCollectModalInvoice(null);
+      await fetchSalesData();
+
+      if (selectedInvoiceForView?.id === collectModalInvoice.id && data.invoice) {
+        setSelectedInvoiceForView(data.invoice);
+      }
+    } catch (err: any) {
+      setCollectError(err.message || "Failed to record payment");
+    } finally {
+      setCollectSubmitting(false);
+    }
   };
 
   return (
@@ -504,13 +608,34 @@ export default function AdminSalesPage() {
                       </td>
 
                       <td className="py-3.5 px-4 text-center whitespace-nowrap">
-                        <button
-                          onClick={() => setSelectedInvoiceForView(inv)}
-                          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-bold transition cursor-pointer"
-                        >
-                          <Printer className="w-3.5 h-3.5" />
-                          <span>View &amp; Print</span>
-                        </button>
+                        <div className="flex items-center justify-center gap-1.5">
+                          {inv.balanceDue > 0 && (
+                            <button
+                              onClick={() => handleOpenCollectModal(inv)}
+                              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-xs font-bold transition cursor-pointer border border-emerald-200"
+                              title="Record payment settlement"
+                            >
+                              <IndianRupee className="w-3.5 h-3.5" />
+                              <span>Collect</span>
+                            </button>
+                          )}
+                          <button
+                            onClick={() => setSelectedInvoiceForView(inv)}
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-bold transition cursor-pointer"
+                            title="View A4 Tax Invoice"
+                          >
+                            <Printer className="w-3.5 h-3.5" />
+                            <span>A4 Invoice</span>
+                          </button>
+                          <Link
+                            href={`/admin/sales/invoice/${inv.id}`}
+                            target="_blank"
+                            className="p-1.5 rounded-lg text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition"
+                            title="Open full A4 page in new tab"
+                          >
+                            <ExternalLink className="w-3.5 h-3.5" />
+                          </Link>
+                        </div>
                       </td>
 
                       <td className="py-3.5 px-4 text-center whitespace-nowrap">
@@ -936,25 +1061,38 @@ export default function AdminSalesPage() {
         </div>
       )}
 
-      {/* Invoice Viewer / Printable Modal */}
+      {/* Invoice Viewer / Full A4 Printable Modal */}
       {selectedInvoiceForView && (
-        <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 overflow-y-auto">
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-3xl w-full max-h-[95vh] flex flex-col overflow-hidden animate-slide-down">
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 overflow-y-auto">
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-4xl w-full max-h-[96vh] flex flex-col overflow-hidden animate-slide-down">
             {/* Header controls (hidden in print) */}
-            <div className="flex items-center justify-between p-4 border-b border-slate-200 bg-slate-50 print:hidden">
+            <div className="flex items-center justify-between p-3.5 sm:p-4 border-b border-slate-200 bg-slate-50 print:hidden">
               <div className="flex items-center gap-2">
                 <FileText className="w-5 h-5 text-blue-600" />
-                <span className="font-bold text-sm text-slate-900">
-                  Tax Invoice &bull; {selectedInvoiceForView.invoiceNumber}
-                </span>
+                <div>
+                  <span className="font-bold text-sm text-slate-900 block leading-tight">
+                    Full A4 Tax Invoice &bull; {selectedInvoiceForView.invoiceNumber}
+                  </span>
+                  <span className="text-[11px] text-slate-500">
+                    Billed to: {selectedInvoiceForView.customer.name} ({selectedInvoiceForView.customer.phone})
+                  </span>
+                </div>
               </div>
               <div className="flex items-center gap-2">
+                <Link
+                  href={`/admin/sales/invoice/${selectedInvoiceForView.id}`}
+                  target="_blank"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition cursor-pointer"
+                >
+                  <ExternalLink className="w-3.5 h-3.5" />
+                  <span>Open Full Page A4</span>
+                </Link>
                 <button
                   onClick={handlePrint}
                   className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition shadow-xs cursor-pointer"
                 >
                   <Printer className="w-3.5 h-3.5" />
-                  <span>Print / Save as PDF</span>
+                  <span>Print Full A4</span>
                 </button>
                 <button
                   onClick={() => setSelectedInvoiceForView(null)}
@@ -965,213 +1103,235 @@ export default function AdminSalesPage() {
               </div>
             </div>
 
-            {/* Printable Invoice Sheet */}
-            <div
-              id="printable-invoice"
-              className="p-6 sm:p-8 overflow-y-auto flex-1 bg-white text-slate-900 font-sans space-y-6"
-            >
-              {/* Invoice Header */}
-              <div className="flex justify-between items-start border-b border-slate-200 pb-6 gap-4">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <Image
-                      src="/assets/logo.png"
-                      alt="RR Tech Services"
-                      width={160}
-                      height={42}
-                      className="h-9 w-auto object-contain"
-                    />
-                  </div>
-                  <h2 className="text-base font-black text-slate-900 mt-2">RR TECH SERVICES</h2>
-                  <p className="text-xs text-slate-600 font-medium">
-                    Laptop &amp; PC Repairs, Upgrades, Refurbished Sales &amp; Accessories
-                  </p>
-                  <p className="text-xs text-slate-500 mt-0.5">
-                    Shop No. 12, Cyber Hub, MG Road, Pune, Maharashtra - 411001
-                  </p>
-                  <p className="text-xs text-slate-500">
-                    Phone: <span className="font-semibold text-slate-800">+91 9209095278</span> | Email: business.rrtechservices@gmail.com
-                  </p>
-                </div>
+            {/* Printable A4 Invoice Sheet Container */}
+            <div className="p-4 sm:p-6 overflow-y-auto flex-1 bg-slate-200/60 flex justify-center print:bg-white print:p-0">
+              <A4InvoiceView invoice={selectedInvoiceForView} />
+            </div>
+          </div>
+        </div>
+      )}
 
-                <div className="text-right">
-                  <span className="text-xs font-black uppercase tracking-wider text-blue-600 bg-blue-50 px-2.5 py-1 rounded border border-blue-200">
-                    TAX / RETAIL INVOICE
-                  </span>
-                  <div className="mt-2 text-xl font-black text-slate-900 font-mono">
-                    {selectedInvoiceForView.invoiceNumber}
-                  </div>
-                  <div className="text-xs text-slate-500 mt-1">
-                    Invoice Date: <span className="font-semibold text-slate-800">{formatISTDate(selectedInvoiceForView.date)}</span>
-                  </div>
-                  <div className="mt-1">
-                    <span
-                      className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold ${
-                        selectedInvoiceForView.paymentStatus === "Paid"
-                          ? "bg-emerald-100 text-emerald-800"
-                          : "bg-amber-100 text-amber-800"
+      {/* Payment Settlement Modal */}
+      {collectModalInvoice && (
+        <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-md w-full overflow-hidden animate-slide-down">
+            <div className="flex items-center justify-between p-4 border-b border-slate-200 bg-slate-50">
+              <div className="flex items-center gap-2">
+                <IndianRupee className="w-5 h-5 text-emerald-600" />
+                <h3 className="font-bold text-sm text-slate-900">
+                  Collect Payment &bull; {collectModalInvoice.invoiceNumber}
+                </h3>
+              </div>
+              <button
+                onClick={() => setCollectModalInvoice(null)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-200 transition cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleRecordPayment} className="p-5 space-y-4">
+              {collectError && (
+                <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-xs text-rose-700">
+                  {collectError}
+                </div>
+              )}
+
+              {/* Customer & Invoice summary */}
+              <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 text-xs space-y-1">
+                <div className="flex justify-between font-bold text-slate-900">
+                  <span>Customer:</span>
+                  <span>{collectModalInvoice.customer.name}</span>
+                </div>
+                <div className="flex justify-between text-slate-600">
+                  <span>Invoice Total:</span>
+                  <span>₹{collectModalInvoice.grandTotal?.toLocaleString("en-IN")}</span>
+                </div>
+                <div className="flex justify-between text-emerald-700 font-semibold">
+                  <span>Already Paid:</span>
+                  <span>₹{collectModalInvoice.amountPaid?.toLocaleString("en-IN")}</span>
+                </div>
+                <div className="flex justify-between text-rose-700 font-bold border-t border-slate-200 pt-1">
+                  <span>Balance Due:</span>
+                  <span>₹{collectModalInvoice.balanceDue?.toLocaleString("en-IN")}</span>
+                </div>
+              </div>
+
+              {/* Amount to Collect */}
+              <div>
+                <label className="text-xs font-bold text-slate-700 block mb-1">
+                  Amount Received (₹) *
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  max={collectModalInvoice.balanceDue}
+                  step="any"
+                  value={collectAmount}
+                  onChange={(e) => setCollectAmount(e.target.value)}
+                  className="w-full px-3.5 py-2 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-emerald-500 font-mono text-base font-bold text-slate-900"
+                  placeholder="Enter amount"
+                  required
+                />
+                <div className="flex gap-2 mt-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setCollectAmount(collectModalInvoice.balanceDue.toString())}
+                    className="text-[11px] font-bold text-blue-600 hover:underline cursor-pointer"
+                  >
+                    Full Balance (₹{collectModalInvoice.balanceDue})
+                  </button>
+                  {collectModalInvoice.balanceDue > 1000 && (
+                    <button
+                      type="button"
+                      onClick={() => setCollectAmount((collectModalInvoice.balanceDue / 2).toString())}
+                      className="text-[11px] font-bold text-slate-500 hover:underline cursor-pointer"
+                    >
+                      50% (₹{Math.round(collectModalInvoice.balanceDue / 2)})
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Payment Mode */}
+              <div>
+                <label className="text-xs font-bold text-slate-700 block mb-1">Payment Mode</label>
+                <div className="grid grid-cols-3 gap-2">
+                  {(["Cash", "UPI", "Bank Transfer", "Card", "Cheque", "Other"] as PaymentMode[]).map((mode) => (
+                    <button
+                      key={mode}
+                      type="button"
+                      onClick={() => setCollectMode(mode)}
+                      className={`py-1.5 px-2 rounded-lg text-xs font-bold border transition cursor-pointer text-center ${
+                        collectMode === mode
+                          ? "bg-emerald-50 text-emerald-800 border-emerald-500 shadow-2xs"
+                          : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
                       }`}
                     >
-                      STATUS: {selectedInvoiceForView.paymentStatus.toUpperCase()}
-                    </span>
-                  </div>
+                      {mode}
+                    </button>
+                  ))}
                 </div>
               </div>
 
-              {/* Customer & Billing Details */}
-              <div className="grid grid-cols-2 gap-6 bg-slate-50/70 p-4 rounded-xl border border-slate-200 text-xs">
-                <div>
-                  <span className="font-bold text-slate-500 uppercase tracking-wider text-[10px] block mb-1">
-                    Billed To (Customer):
-                  </span>
-                  <div className="text-sm font-black text-slate-900">
-                    {selectedInvoiceForView.customer.name}
-                  </div>
-                  <div className="text-slate-600 font-mono mt-0.5">
-                    Phone: {selectedInvoiceForView.customer.phone}
-                  </div>
-                  {selectedInvoiceForView.customer.email && (
-                    <div className="text-slate-600">Email: {selectedInvoiceForView.customer.email}</div>
-                  )}
-                  {selectedInvoiceForView.customer.address && (
-                    <div className="text-slate-600 mt-0.5">Address: {selectedInvoiceForView.customer.address}</div>
-                  )}
-                  {selectedInvoiceForView.customer.gstin && (
-                    <div className="text-slate-600 font-mono mt-0.5">GSTIN: {selectedInvoiceForView.customer.gstin}</div>
-                  )}
-                </div>
+              {/* UTR / Ref Number */}
+              <div>
+                <label className="text-xs font-bold text-slate-700 block mb-1">
+                  Reference / UTR Number (Optional)
+                </label>
+                <input
+                  type="text"
+                  value={collectRef}
+                  onChange={(e) => setCollectRef(e.target.value)}
+                  placeholder="e.g. UPI Ref / Cheque No."
+                  className="w-full px-3 py-1.5 text-xs rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-emerald-500 font-mono"
+                />
+              </div>
 
-                <div className="space-y-1 text-right sm:text-left">
-                  <span className="font-bold text-slate-500 uppercase tracking-wider text-[10px] block mb-1">
-                    Payment Information:
-                  </span>
-                  <div>
-                    <span className="text-slate-500">Payment Mode: </span>
-                    <span className="font-bold text-slate-800">{selectedInvoiceForView.paymentMode}</span>
-                  </div>
-                  <div>
-                    <span className="text-slate-500">Amount Paid: </span>
-                    <span className="font-bold text-emerald-700">₹{selectedInvoiceForView.amountPaid.toLocaleString("en-IN")}</span>
-                  </div>
-                  {selectedInvoiceForView.balanceDue > 0 && (
-                    <div>
-                      <span className="text-slate-500">Balance Due: </span>
-                      <span className="font-bold text-rose-700">₹{selectedInvoiceForView.balanceDue.toLocaleString("en-IN")}</span>
+              {/* Proof / Screenshot Upload (Cloudinary) */}
+              <div>
+                <label className="text-xs font-bold text-slate-700 block mb-1">
+                  Payment Proof / Screenshot (Cloudinary)
+                </label>
+                {collectProofUrl ? (
+                  <div className="flex items-center gap-3 p-2 rounded-xl bg-slate-50 border border-slate-200">
+                    <img
+                      src={collectProofUrl}
+                      alt="Proof"
+                      className="w-12 h-12 rounded-lg object-cover border border-slate-300"
+                    />
+                    <div className="flex-1 min-w-0">
+                      <span className="text-xs font-bold text-emerald-700 block truncate flex items-center gap-1">
+                        <Check className="w-3.5 h-3.5" /> Uploaded to Cloudinary
+                      </span>
+                      <a
+                        href={collectProofUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-[11px] text-blue-600 hover:underline block truncate"
+                      >
+                        View full proof image &rarr;
+                      </a>
                     </div>
-                  )}
-                </div>
+                    <button
+                      type="button"
+                      onClick={() => setCollectProofUrl("")}
+                      className="p-1 rounded-lg text-slate-400 hover:text-rose-600 transition cursor-pointer"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                ) : (
+                  <div className="relative">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleCollectProofUpload}
+                      disabled={uploadingCollectProof}
+                      id="collect-proof-input"
+                      className="hidden"
+                    />
+                    <label
+                      htmlFor="collect-proof-input"
+                      className="flex items-center justify-center gap-2 p-3 border-2 border-dashed border-slate-300 rounded-xl hover:border-emerald-500 bg-slate-50 hover:bg-emerald-50/30 transition cursor-pointer text-xs font-semibold text-slate-600"
+                    >
+                      {uploadingCollectProof ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin text-emerald-600" />
+                          <span>Uploading Proof to Cloudinary...</span>
+                        </>
+                      ) : (
+                        <>
+                          <UploadCloud className="w-4 h-4 text-emerald-600" />
+                          <span>Upload UPI / Bank Receipt Screenshot</span>
+                        </>
+                      )}
+                    </label>
+                  </div>
+                )}
               </div>
 
-              {/* Items Table */}
-              <div className="border border-slate-200 rounded-xl overflow-hidden text-xs">
-                <table className="w-full text-left">
-                  <thead className="bg-slate-100 text-slate-700 font-bold uppercase text-[10px] border-b border-slate-200">
-                    <tr>
-                      <th className="py-2.5 px-3 text-center w-12">#</th>
-                      <th className="py-2.5 px-3">Item Description</th>
-                      <th className="py-2.5 px-3">Item Code</th>
-                      <th className="py-2.5 px-3 text-center">Qty</th>
-                      <th className="py-2.5 px-3 text-right">Unit Price</th>
-                      <th className="py-2.5 px-3 text-right">Total</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-200">
-                    {selectedInvoiceForView.items.map((item, index) => (
-                      <tr key={index}>
-                        <td className="py-2.5 px-3 text-center text-slate-400 font-mono">
-                          {index + 1}
-                        </td>
-                        <td className="py-2.5 px-3">
-                          <div className="font-bold text-slate-900">{item.itemName}</div>
-                          {item.brand && (
-                            <div className="text-[10.5px] text-slate-500">
-                              {item.brand} {item.model ? `• ${item.model}` : ""}
-                            </div>
-                          )}
-                          {item.serialNumbers && item.serialNumbers.length > 0 && (
-                            <div className="text-[10px] font-mono text-blue-700 mt-0.5">
-                              S/N: {item.serialNumbers.join(", ")}
-                            </div>
-                          )}
-                        </td>
-                        <td className="py-2.5 px-3 font-mono text-[11px] text-slate-600">
-                          {item.itemCode || "-"}
-                        </td>
-                        <td className="py-2.5 px-3 text-center font-bold text-slate-900">
-                          {item.quantity}
-                        </td>
-                        <td className="py-2.5 px-3 text-right text-slate-700">
-                          ₹{item.unitPrice.toLocaleString("en-IN")}
-                        </td>
-                        <td className="py-2.5 px-3 text-right font-black text-slate-900">
-                          ₹{item.total.toLocaleString("en-IN")}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+              {/* Notes */}
+              <div>
+                <label className="text-xs font-bold text-slate-700 block mb-1">
+                  Collection Note (Optional)
+                </label>
+                <input
+                  type="text"
+                  value={collectNotes}
+                  onChange={(e) => setCollectNotes(e.target.value)}
+                  placeholder="e.g. Cleared 2nd installment via GPay"
+                  className="w-full px-3 py-1.5 text-xs rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                />
               </div>
 
-              {/* Financial Calculation Summary */}
-              <div className="flex justify-end text-xs">
-                <div className="w-64 space-y-1.5 p-3 rounded-xl bg-slate-50 border border-slate-200">
-                  <div className="flex justify-between text-slate-600">
-                    <span>Subtotal:</span>
-                    <span className="font-semibold text-slate-900">₹{selectedInvoiceForView.subtotal.toLocaleString("en-IN")}</span>
-                  </div>
-
-                  {selectedInvoiceForView.discount > 0 && (
-                    <div className="flex justify-between text-rose-600">
-                      <span>Discount:</span>
-                      <span>-₹{selectedInvoiceForView.discount.toLocaleString("en-IN")}</span>
-                    </div>
+              <div className="pt-3 border-t border-slate-200 flex items-center justify-end gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => setCollectModalInvoice(null)}
+                  className="px-4 py-2 rounded-xl border border-slate-200 text-xs font-bold text-slate-600 hover:bg-slate-50 transition cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={collectSubmitting || uploadingCollectProof}
+                  className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition shadow-sm cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
+                >
+                  {collectSubmitting ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      <span>Recording Payment...</span>
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle2 className="w-3.5 h-3.5" />
+                      <span>Confirm &amp; Auto-Credit Wallet</span>
+                    </>
                   )}
-
-                  {selectedInvoiceForView.taxAmount > 0 && (
-                    <div className="flex justify-between text-slate-600">
-                      <span>GST ({selectedInvoiceForView.taxRate}%):</span>
-                      <span>+₹{selectedInvoiceForView.taxAmount.toLocaleString("en-IN")}</span>
-                    </div>
-                  )}
-
-                  <div className="border-t border-slate-300 pt-1.5 flex justify-between text-sm font-black text-slate-900">
-                    <span>Grand Total:</span>
-                    <span className="text-blue-600">₹{selectedInvoiceForView.grandTotal.toLocaleString("en-IN")}</span>
-                  </div>
-
-                  <div className="flex justify-between text-[11px] text-emerald-700 font-bold">
-                    <span>Amount Paid:</span>
-                    <span>₹{selectedInvoiceForView.amountPaid.toLocaleString("en-IN")}</span>
-                  </div>
-
-                  {selectedInvoiceForView.balanceDue > 0 && (
-                    <div className="flex justify-between text-[11px] text-rose-700 font-bold">
-                      <span>Balance Due:</span>
-                      <span>₹{selectedInvoiceForView.balanceDue.toLocaleString("en-IN")}</span>
-                    </div>
-                  )}
-                </div>
+                </button>
               </div>
-
-              {/* Terms and Signature */}
-              <div className="border-t border-slate-200 pt-4 flex flex-col sm:flex-row justify-between items-end gap-6 text-[11px] text-slate-500">
-                <div className="space-y-1 max-w-sm">
-                  <span className="font-bold text-slate-700 uppercase tracking-wider text-[10px] block">
-                    Terms &amp; Conditions
-                  </span>
-                  <p>1. Warranty covered as per manufacturer or RR Tech refurbished terms.</p>
-                  <p>2. Physical or liquid damage voids all warranty.</p>
-                  <p>3. Goods once sold are not returnable without prior verification.</p>
-                </div>
-
-                <div className="text-center sm:text-right space-y-8">
-                  <span className="font-bold text-slate-700 block">For RR TECH SERVICES</span>
-                  <div className="border-t border-slate-400 pt-1 text-slate-600 font-semibold w-40 ml-auto">
-                    Authorized Signatory
-                  </div>
-                </div>
-              </div>
-            </div>
+            </form>
           </div>
         </div>
       )}

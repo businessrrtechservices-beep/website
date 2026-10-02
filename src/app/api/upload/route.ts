@@ -28,10 +28,11 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    const folder = (formData.get("folder") as string) || "rrtechservices/attachments";
     const bytes = await file.arrayBuffer();
     const buffer = Buffer.from(bytes);
 
-    const result = await uploadImageToCloudinary(buffer, "rrtechservices/products");
+    const result = await uploadImageToCloudinary(buffer, folder);
 
     return NextResponse.json({
       success: true,
