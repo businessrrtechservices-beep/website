@@ -171,21 +171,6 @@ export default function CompanyExpensesPage() {
     setModalOpen(true);
   };
 
-  const handleOpenCourierQuickPay = () => {
-    setTitle("Courier Charges");
-    setCategory("Courier & Logistics");
-    setAmount("");
-    setVendor("DTDC");
-    setDate(getISTDateTimeLocal());
-    setPaymentMode("UPI");
-    setReferenceNumber("");
-    setFundedBy("partner_borrowing");
-    setNotes("Paid directly to courier delivery partner from personal money");
-    setProofUrl("");
-    setFormError(null);
-    setModalOpen(true);
-  };
-
   const handleSubmitExpense = async (e: React.FormEvent) => {
     e.preventDefault();
     const parsedAmount = parseFloat(amount);
@@ -333,15 +318,6 @@ export default function CompanyExpensesPage() {
           >
             <Download className="w-3.5 h-3.5 text-slate-500" />
             <span className="hidden sm:inline">Export CSV</span>
-          </button>
-
-          <button
-            onClick={handleOpenCourierQuickPay}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-xs font-bold text-white transition shadow-xs cursor-pointer"
-            title="Log Courier or Errand paid directly from personal pocket without wallet mismatch"
-          >
-            <Package className="w-4 h-4" />
-            <span>⚡ Quick Courier Pay</span>
           </button>
 
           <button
@@ -723,16 +699,17 @@ export default function CompanyExpensesPage() {
 
       {/* Add Expense Modal Dialog */}
       {modalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-200">
-          <div className="bg-white rounded-2xl max-w-xl w-full p-6 shadow-2xl border border-slate-200 max-h-[92vh] overflow-y-auto">
-            <div className="flex items-center justify-between pb-4 border-b border-slate-100">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl max-w-xl w-full shadow-2xl border border-slate-200 max-h-[85vh] flex flex-col overflow-hidden">
+            {/* Modal Header (Fixed at top) */}
+            <div className="flex items-center justify-between p-4 sm:p-5 border-b border-slate-100 shrink-0 bg-white">
               <div>
-                <h3 className="text-lg font-black text-slate-900 flex items-center gap-2">
+                <h3 className="text-base sm:text-lg font-black text-slate-900 flex items-center gap-2">
                   <Receipt className="w-5 h-5 text-purple-600" />
                   <span>Record Company Expense</span>
                 </h3>
                 <p className="text-xs text-slate-500 mt-0.5">
-                  Logged expenses auto-debit the Shop Wallet Ledger or credit Partner Investment.
+                  Logged expenses auto-debit the Shop Wallet Ledger or credit Partner Borrowed/Investment.
                 </p>
               </div>
               <button
@@ -743,15 +720,17 @@ export default function CompanyExpensesPage() {
               </button>
             </div>
 
-            {formError && (
-              <div className="mt-4 p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-center gap-2">
-                <AlertCircle className="w-4 h-4 shrink-0" />
-                <span>{formError}</span>
-              </div>
-            )}
+            {/* Scrollable Form Body */}
+            <div className="p-4 sm:p-5 overflow-y-auto flex-1 space-y-4">
+              {formError && (
+                <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 shrink-0" />
+                  <span>{formError}</span>
+                </div>
+              )}
 
-            <form onSubmit={handleSubmitExpense} className="mt-4 space-y-4">
-              {/* Category Selection */}
+              <form id="add-expense-form" onSubmit={handleSubmitExpense} className="space-y-4">
+                {/* Category Selection */}
               <div>
                 <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
                   Expense Category *
@@ -908,7 +887,7 @@ export default function CompanyExpensesPage() {
                     </p>
                   </button>
 
-                  {/* Option 2: Middle Way Out-of-Pocket / Courier Pay */}
+                  {/* Option 2: Out-of-Pocket Partner Borrowing */}
                   <button
                     type="button"
                     onClick={() => setFundedBy("partner_borrowing")}
@@ -919,14 +898,14 @@ export default function CompanyExpensesPage() {
                     }`}
                   >
                     <div className="flex items-center gap-1.5 text-xs font-bold text-amber-900">
-                      <Package className="w-4 h-4 text-amber-600" />
-                      <span>Paid Out-of-Pocket</span>
+                      <Users className="w-4 h-4 text-amber-600" />
+                      <span>Borrow from Partner</span>
                     </div>
                     <span className="inline-block mt-0.5 px-1.5 py-0.2 rounded bg-amber-200/80 text-amber-900 text-[9px] font-black uppercase">
-                      Zero Mismatch
+                      Out-of-Pocket
                     </span>
                     <p className="text-[10px] text-slate-500 mt-1 leading-snug">
-                      Courier/Errand: Auto-pairs Credit+Debit. Net ₹0 to cash drawer; shop owes you!
+                      Partner pays vendor directly: adds to partner borrowed balance. Zero cash drawer mismatch.
                     </p>
                   </button>
 
@@ -1043,34 +1022,37 @@ export default function CompanyExpensesPage() {
                 />
               </div>
 
-              {/* Buttons */}
-              <div className="pt-2 flex items-center justify-end gap-2.5">
-                <button
-                  type="button"
-                  onClick={() => setModalOpen(false)}
-                  className="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={submitting || uploadingProof}
-                  className="inline-flex items-center gap-1.5 px-5 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold shadow-xs transition cursor-pointer disabled:opacity-50"
-                >
-                  {submitting ? (
-                    <>
-                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                      <span>Saving...</span>
-                    </>
-                  ) : (
-                    <>
-                      <CheckCircle2 className="w-3.5 h-3.5" />
-                      <span>Record Expense &amp; Sync Ledger</span>
-                    </>
-                  )}
-                </button>
-              </div>
-            </form>
+              </form>
+            </div>
+
+            {/* Pinned Sticky Footer (Action Buttons Always Visible) */}
+            <div className="p-3 sm:p-4 border-t border-slate-100 bg-slate-50 flex items-center justify-end gap-2.5 shrink-0">
+              <button
+                type="button"
+                onClick={() => setModalOpen(false)}
+                className="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                form="add-expense-form"
+                disabled={submitting || uploadingProof}
+                className="inline-flex items-center gap-1.5 px-5 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold shadow-xs transition cursor-pointer disabled:opacity-50"
+              >
+                {submitting ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    <span>Saving...</span>
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    <span>Record Expense</span>
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         </div>
       )}

@@ -207,14 +207,14 @@ export async function createExpense(data: {
     }
   }
 
-  // 2. Middle Way: Out-of-Pocket Direct Pay (Courier, Errands, Urgent Parts)
-  // Atomically logs both Credit (Borrowing from Partner) + Debit (Expense)
-  // Net cash wallet impact is mathematically 0 (guaranteed NO wallet balance mismatch!)
+  // 2. Out-of-Pocket Direct Pay (Courier, Errands, Urgent Parts)
+  // Increases Partner's borrowed debt (Shop owes partner reimbursement)
+  // Zero cash drawer impact (no phantom credit or debit in cash wallet!)
   if (fundedBy === "partner_borrowing" && data.partnerId) {
     try {
       const pName = data.partnerName || "Partner";
 
-      // A. Increase Partner's borrowed debt (Shop owes partner this reimbursement)
+      // Increase Partner's borrowed debt (Shop owes partner this reimbursement)
       const bTx = await recordPartnerTransaction({
         partnerId: data.partnerId,
         type: "borrow",
@@ -224,39 +224,11 @@ export async function createExpense(data: {
         reason: `Out-of-Pocket paid by ${pName} for: ${data.title} (${data.category})`,
         referenceNumber: data.referenceNumber,
         proofUrl: data.proofUrl,
-        syncMainLedger: false, // Handled atomically below to guarantee zero wallet balance mismatch!
+        syncMainLedger: false, // Strictly false: cash drawer is not inflated!
       });
       linkedBorrowingTxId = bTx.id;
-
-      // B1. Paired Credit: Lent by Partner for out-of-pocket expense
-      const creditTx = await createTransaction({
-        type: "credit",
-        amount,
-        paymentMode: (data.paymentMode as any) || "UPI",
-        category: "Partner Borrowing",
-        reason: `Lent by ${pName} [Out-of-Pocket: ${data.title}]`,
-        referenceNumber: data.referenceNumber,
-        proofUrl: data.proofUrl,
-        proofPublicId: data.proofPublicId,
-        date: expenseDate,
-      });
-      pairedCreditLedgerTxId = creditTx.id;
-
-      // B2. Paired Debit: Direct operational expense paid
-      const debitTx = await createTransaction({
-        type: "debit",
-        amount,
-        paymentMode: (data.paymentMode as any) || "UPI",
-        category: "Office Expense",
-        reason: `Expense: ${data.title} [${data.category}] (Paid directly by ${pName})`,
-        referenceNumber: data.referenceNumber,
-        proofUrl: data.proofUrl,
-        proofPublicId: data.proofPublicId,
-        date: expenseDate,
-      });
-      linkedLedgerTxId = debitTx.id;
     } catch (err) {
-      console.error("Failed to record atomic out-of-pocket borrowing expense:", err);
+      console.error("Failed to record out-of-pocket partner borrowing expense:", err);
     }
   }
 

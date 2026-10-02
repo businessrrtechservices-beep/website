@@ -104,7 +104,7 @@ export async function POST(
         }
       }
 
-      // Option C: Paid Out-of-Pocket by Partner (Middle Way: Atomic Pair with Zero Wallet Mismatch!)
+      // Option C: Paid Out-of-Pocket by Partner
       else if (financeMode === "partner_borrowing" && partnerId) {
         try {
           // Increase partner's borrowed debt (Shop owes partner reimbursement)
@@ -116,29 +116,7 @@ export async function POST(
             date: nowIST,
             reason: `Restock Out-of-Pocket paid by ${partnerName}: ${originalItem.name} x${addedQty}`,
             referenceNumber: paymentRef,
-            syncMainLedger: false,
-          });
-
-          // Atomic Paired Credit: Lent by Partner
-          await createTransaction({
-            type: "credit",
-            amount: totalPurchaseValue,
-            paymentMode: (paymentMode as any) || "UPI",
-            category: "Partner Borrowing",
-            reason: `Lent by ${partnerName} [Restock Out-of-Pocket: ${originalItem.name} x${addedQty}]`,
-            referenceNumber: paymentRef,
-            date: nowIST,
-          });
-
-          // Atomic Paired Debit: Stock Purchase Expense
-          await createTransaction({
-            type: "debit",
-            amount: totalPurchaseValue,
-            paymentMode: (paymentMode as any) || "UPI",
-            category: "Stock Purchase",
-            reason: `Restock Purchase: ${originalItem.name} x${addedQty} (Paid directly by ${partnerName})`,
-            referenceNumber: paymentRef,
-            date: nowIST,
+            syncMainLedger: false, // Strictly false: cash drawer is not inflated!
           });
         } catch (partnerErr) {
           console.error("Failed to record partner out-of-pocket restock:", partnerErr);

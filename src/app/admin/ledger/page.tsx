@@ -66,6 +66,7 @@ export default function AdminLedgerPage() {
 
   // Partner Borrowing / Repayment Flag
   const [isPartnerBorrowing, setIsPartnerBorrowing] = useState(false);
+  const [isDebitPartnerPaid, setIsDebitPartnerPaid] = useState(false);
   const [partnerWallets, setPartnerWallets] = useState<{ id: string; name: string; currentBorrowedBalance?: number }[]>([]);
   const [selectedPartnerId, setSelectedPartnerId] = useState("");
   const [debitFlag, setDebitFlag] = useState<"borrower" | "dealer" | "expense">("dealer");
@@ -178,7 +179,58 @@ export default function AdminLedgerPage() {
     setError(null);
 
     try {
-      if (isPartnerBorrowing) {
+      if (formType === "debit" && isDebitPartnerPaid) {
+        if (!selectedPartnerId) {
+          throw new Error("Please select the partner who paid personally out-of-pocket");
+        }
+        const pObj = partnerWallets.find((p) => p.id === selectedPartnerId);
+        const pName = pObj?.name || "Partner";
+
+        // 1. Add amount to partner's borrowed balance without cash wallet inflation (zero drawer mismatch!)
+        const res = await fetch("/api/borrowing", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            partnerId: selectedPartnerId,
+            type: "borrow",
+            amount: parseFloat(formAmount),
+            paymentMode: formPaymentMode,
+            date: parseToISTIsoString(formDate),
+            reason: `Out-of-pocket paid by ${pName} [${formCategory}]: ${formReason.trim()}`,
+            referenceNumber: formRef.trim(),
+            proofUrl: formProofUrl || undefined,
+            syncMainLedger: false, // ZERO cash drawer inflation!
+          }),
+        });
+
+        if (!res.ok) {
+          const data = await res.json();
+          throw new Error(data.error || "Failed to update partner borrowed balance");
+        }
+
+        // 2. Mirror into Company Expenses tracker so the expense is officially logged
+        try {
+          await fetch("/api/expenses", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              title: formReason.trim() || `Shop Expense (${formCategory})`,
+              category: formCategory === "Spare Parts" ? "Spare Parts & Components" : "Office & Utilities",
+              amount: parseFloat(formAmount),
+              paymentMode: formPaymentMode,
+              fundedBy: "partner_borrowing",
+              partnerId: selectedPartnerId,
+              partnerName: pName,
+              referenceNumber: formRef.trim(),
+              proofUrl: formProofUrl || undefined,
+              date: parseToISTIsoString(formDate),
+              notes: `Paid personally by partner ${pName} (Added to Partner Borrowed debt)`,
+            }),
+          });
+        } catch (expErr) {
+          console.warn("Expense mirror record:", expErr);
+        }
+      } else if (isPartnerBorrowing) {
         if (!selectedPartnerId) {
           throw new Error("Please select a partner wallet or create one in the Borrowing tab");
         }
@@ -240,8 +292,10 @@ export default function AdminLedgerPage() {
       setFormProofUrl("");
       setSelectedDealerId("");
       setIsPartnerBorrowing(false);
+      setIsDebitPartnerPaid(false);
       setFormDate(getISTDateTimeLocal());
       await fetchLedger();
+      await fetchPartnerWallets();
     } catch (err: any) {
       setError(err?.message || "Something went wrong");
     } finally {
@@ -563,9 +617,10 @@ export default function AdminLedgerPage() {
 
       {/* New Transaction Modal */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-xl max-w-md w-full overflow-hidden animate-slide-down">
-            <div className="flex items-center justify-between p-4 sm:p-5 border-b border-slate-100">
+        <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4">
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-xl max-w-md w-full max-h-[85vh] flex flex-col overflow-hidden animate-slide-down">
+            {/* Modal Header (Fixed at top) */}
+            <div className="flex items-center justify-between p-4 sm:p-5 border-b border-slate-100 shrink-0 bg-white">
               <div className="flex items-center gap-2">
                 <div className="p-2 rounded-xl bg-blue-50 text-blue-600">
                   <Wallet className="w-5 h-5" />
@@ -583,12 +638,15 @@ export default function AdminLedgerPage() {
               </button>
             </div>
 
-            <form onSubmit={handleCreateTransaction} className="p-4 sm:p-6 space-y-4">
+            {/* Scrollable Form Body */}
+            <div className="p-4 sm:p-5 overflow-y-auto flex-1 space-y-4">
               {error && (
                 <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-semibold">
                   {error}
                 </div>
               )}
+
+              <form id="ledger-transaction-form" onSubmit={handleCreateTransaction} className="space-y-4">
 
               {/* Type Switcher */}
               <div>
@@ -862,21 +920,64 @@ export default function AdminLedgerPage() {
                     </div>
                   )}
 
-                  {/* Flag 3 Panel: Shop & Digital Operating Expenses */}
+                  {/* Flag 3 Panel: General Shop Expenses & Out-of-Pocket Partner Borrowing */}
                   {debitFlag === "expense" && (
-                    <div className="p-3.5 rounded-xl bg-rose-50/80 border border-rose-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
-                      <div>
-                        <span className="font-bold text-rose-900 block">General Shop &amp; Operating Expense</span>
-                        <span className="text-[11px] text-rose-700">
-                          Paid personally for Courier / Errands? Use <strong>Quick Courier Pay</strong> in Company Expenses to auto-pair Credit+Debit with <strong>zero wallet mismatch</strong>!
-                        </span>
+                    <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 space-y-2.5">
+                      <div className="flex items-center justify-between">
+                        <label className="flex items-center gap-2 cursor-pointer select-none">
+                          <input
+                            type="checkbox"
+                            id="debitPartnerPaidCheck"
+                            checked={isDebitPartnerPaid}
+                            onChange={(e) => {
+                              const checked = e.target.checked;
+                              setIsDebitPartnerPaid(checked);
+                              if (checked && !selectedPartnerId && partnerWallets.length > 0) {
+                                setSelectedPartnerId(partnerWallets[0].id);
+                              }
+                            }}
+                            className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 border-slate-300 cursor-pointer"
+                          />
+                          <span className="text-xs font-bold text-slate-800">
+                            Paid personally by Partner? (Borrow from Partner)
+                          </span>
+                        </label>
+                        <span className="text-[10px] text-slate-500 font-medium">Out-of-Pocket</span>
                       </div>
-                      <Link
-                        href="/admin/expenses"
-                        className="px-2.5 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs transition whitespace-nowrap self-start sm:self-auto shadow-2xs"
-                      >
-                        ⚡ Quick Courier Pay &rarr;
-                      </Link>
+
+                      {isDebitPartnerPaid ? (
+                        <div className="pt-2 border-t border-slate-200/80 space-y-2 text-xs">
+                          <p className="text-[11px] text-slate-600 leading-snug">
+                            Amount will be added to the partner&apos;s <strong>Borrowed Balance</strong> (shop owes partner reimbursement). <strong>Cash drawer balance is unchanged</strong> (zero wallet inflation).
+                          </p>
+                          <div>
+                            <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                              Select Paying Partner:
+                            </label>
+                            {partnerWallets.length === 0 ? (
+                              <p className="text-xs text-amber-800 bg-amber-50 p-2 rounded border border-amber-200">
+                                No partners found. Add partners in the Borrowing section first.
+                              </p>
+                            ) : (
+                              <select
+                                value={selectedPartnerId}
+                                onChange={(e) => setSelectedPartnerId(e.target.value)}
+                                className="w-full px-3 py-1.5 bg-white border border-slate-300 rounded-lg text-xs font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                              >
+                                {partnerWallets.map((p) => (
+                                  <option key={p.id} value={p.id}>
+                                    {p.name} (Owed: ₹{(p.currentBorrowedBalance || 0).toLocaleString("en-IN")})
+                                  </option>
+                                ))}
+                              </select>
+                            )}
+                          </div>
+                        </div>
+                      ) : (
+                        <p className="text-[11px] text-slate-500">
+                          General operating expenses paid directly from the cash drawer will auto-debit your wallet balance.
+                        </p>
+                      )}
                     </div>
                   )}
                 </div>
@@ -1093,34 +1194,38 @@ export default function AdminLedgerPage() {
                 )}
               </div>
 
-              <div className="pt-2 flex items-center justify-end gap-2.5">
-                <button
-                  type="button"
-                  onClick={() => setIsModalOpen(false)}
-                  className="px-4 py-2 rounded-xl border border-slate-200 text-xs font-bold text-slate-600 hover:bg-slate-50 transition cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={submitting || uploadingProof}
-                  className={`px-5 py-2 rounded-xl text-xs font-bold text-white transition shadow-sm cursor-pointer flex items-center gap-1.5 ${
-                    formType === "credit"
-                      ? "bg-emerald-600 hover:bg-emerald-700"
-                      : "bg-rose-600 hover:bg-rose-700"
-                  } disabled:opacity-60`}
-                >
-                  {submitting ? (
-                    <>
-                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                      <span>Saving...</span>
-                    </>
-                  ) : (
-                    <span>Record {formType === "credit" ? "Credit" : "Debit"}</span>
-                  )}
-                </button>
-              </div>
-            </form>
+              </form>
+            </div>
+
+            {/* Pinned Sticky Footer (Action Buttons Always Visible) */}
+            <div className="p-3 sm:p-4 border-t border-slate-100 bg-slate-50 flex items-center justify-end gap-2.5 shrink-0">
+              <button
+                type="button"
+                onClick={() => setIsModalOpen(false)}
+                className="px-4 py-2 rounded-xl border border-slate-200 text-xs font-bold text-slate-600 hover:bg-slate-100 transition cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                form="ledger-transaction-form"
+                disabled={submitting || uploadingProof}
+                className={`px-5 py-2 rounded-xl text-xs font-bold text-white transition shadow-sm cursor-pointer flex items-center gap-1.5 ${
+                  formType === "credit"
+                    ? "bg-emerald-600 hover:bg-emerald-700"
+                    : "bg-rose-600 hover:bg-rose-700"
+                } disabled:opacity-60`}
+              >
+                {submitting ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    <span>Saving...</span>
+                  </>
+                ) : (
+                  <span>Record {formType === "credit" ? "Credit" : "Debit"}</span>
+                )}
+              </button>
+            </div>
           </div>
         </div>
       )}

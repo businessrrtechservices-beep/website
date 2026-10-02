@@ -24,6 +24,7 @@ import {
   CreditCard,
   Handshake,
   Package,
+  Barcode,
 } from "lucide-react";
 import { InventoryCategory, InventoryItem, StockAllocationRecord } from "@/lib/inventoryTypes";
 import { Dealer } from "@/lib/dealerTypes";
@@ -54,7 +55,7 @@ export default function AdminInventoryPage() {
   const [restockDealerId, setRestockDealerId] = useState("");
   const [restockPartnerId, setRestockPartnerId] = useState("");
   const [restockSerials, setRestockSerials] = useState("");
-  const [restockSplitUnits, setRestockSplitUnits] = useState(false);
+  const [restockSplitUnits, setRestockSplitUnits] = useState(true);
   const [restockSubmitting, setRestockSubmitting] = useState(false);
   const [restockError, setRestockError] = useState<string | null>(null);
   const [partnerWallets, setPartnerWallets] = useState<any[]>([]);
@@ -224,7 +225,7 @@ export default function AdminInventoryPage() {
     setRestockPaymentRef("");
     setRestockDealerId(item.dealerId || "");
     setRestockSerials("");
-    setRestockSplitUnits(false);
+    setRestockSplitUnits(true);
     setRestockError(null);
     if (partnerWallets.length > 0 && !restockPartnerId) {
       setRestockPartnerId(partnerWallets[0].id);
@@ -1616,10 +1617,10 @@ export default function AdminInventoryPage() {
 
       {/* 1-Click Fast Restock Modal Dialog */}
       {selectedItemForRestock && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-200">
-          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 max-h-[92vh] overflow-y-auto">
-            {/* Modal Header */}
-            <div className="flex items-start justify-between pb-3.5 border-b border-slate-100">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl max-w-lg w-full shadow-2xl border border-slate-200 max-h-[85vh] flex flex-col overflow-hidden">
+            {/* Modal Header (Fixed at top) */}
+            <div className="flex items-start justify-between p-4 sm:p-5 border-b border-slate-100 shrink-0 bg-white">
               <div>
                 <span className="text-[10px] font-black uppercase tracking-wider text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 inline-block mb-1">
                   ⚡ 1-Click Quick Restock
@@ -1639,39 +1640,41 @@ export default function AdminInventoryPage() {
               </button>
             </div>
 
-            {/* Pre-populated Product Chip */}
-            <div className="my-3.5 p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs space-y-1.5">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <span className="font-bold text-slate-800">
-                  {selectedItemForRestock.brand ? `${selectedItemForRestock.brand} ` : ""}
-                  {selectedItemForRestock.model ? `• ${selectedItemForRestock.model}` : ""}
-                </span>
-                <span className="px-2 py-0.5 rounded bg-blue-50 text-blue-700 font-bold text-[10px] border border-blue-200">
-                  {selectedItemForRestock.category} / {selectedItemForRestock.subcategory}
-                </span>
+            {/* Scrollable Form Body */}
+            <div className="p-4 sm:p-5 overflow-y-auto flex-1 space-y-3.5">
+              {/* Pre-populated Product Chip */}
+              <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs space-y-1.5">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="font-bold text-slate-800">
+                    {selectedItemForRestock.brand ? `${selectedItemForRestock.brand} ` : ""}
+                    {selectedItemForRestock.model ? `• ${selectedItemForRestock.model}` : ""}
+                  </span>
+                  <span className="px-2 py-0.5 rounded bg-blue-50 text-blue-700 font-bold text-[10px] border border-blue-200">
+                    {selectedItemForRestock.category} / {selectedItemForRestock.subcategory}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between text-[11px] text-slate-500 border-t border-slate-200/60 pt-1.5">
+                  <span>
+                    Current Stock:{" "}
+                    <strong className="text-slate-800">
+                      {selectedItemForRestock.availableQuantity} available
+                    </strong>{" "}
+                    ({selectedItemForRestock.stockQuantity} total)
+                  </span>
+                  <span className="font-mono text-slate-600">
+                    SKU: {selectedItemForRestock.code}
+                  </span>
+                </div>
               </div>
-              <div className="flex items-center justify-between text-[11px] text-slate-500 border-t border-slate-200/60 pt-1.5">
-                <span>
-                  Current Stock:{" "}
-                  <strong className="text-slate-800">
-                    {selectedItemForRestock.availableQuantity} available
-                  </strong>{" "}
-                  ({selectedItemForRestock.stockQuantity} total)
-                </span>
-                <span className="font-mono text-slate-600">
-                  SKU: {selectedItemForRestock.code}
-                </span>
-              </div>
-            </div>
 
-            {restockError && (
-              <div className="mb-3.5 p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-center gap-2">
-                <AlertCircle className="w-4 h-4 shrink-0" />
-                <span>{restockError}</span>
-              </div>
-            )}
+              {restockError && (
+                <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 shrink-0" />
+                  <span>{restockError}</span>
+                </div>
+              )}
 
-            <form onSubmit={handleConfirmRestock} className="space-y-4">
+              <form id="restock-form" onSubmit={handleConfirmRestock} className="space-y-3.5">
               {/* Restock Quantity, Cost, Selling Price */}
               <div className="grid grid-cols-3 gap-2.5">
                 <div>
@@ -1899,34 +1902,97 @@ export default function AdminInventoryPage() {
                 />
               </div>
 
-              {/* Modal Buttons */}
-              <div className="pt-2 flex items-center justify-end gap-2.5">
-                <button
-                  type="button"
-                  onClick={() => setSelectedItemForRestock(null)}
-                  className="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={restockSubmitting}
-                  className="inline-flex items-center gap-1.5 px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-xs transition cursor-pointer disabled:opacity-50"
-                >
-                  {restockSubmitting ? (
-                    <>
-                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                      <span>Restocking...</span>
-                    </>
-                  ) : (
-                    <>
-                      <CheckCircle2 className="w-3.5 h-3.5" />
-                      <span>Confirm Restock (+{restockQty || 1} Units)</span>
-                    </>
-                  )}
-                </button>
+              {/* Item Tracking & SKU ID Assignment Mode */}
+              <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="block text-[11px] font-bold text-slate-800 uppercase tracking-wider">
+                    Item Tracking &amp; SKU ID Assignment
+                  </label>
+                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${
+                    restockSplitUnits
+                      ? "bg-blue-50 text-blue-700 border-blue-200"
+                      : "bg-emerald-50 text-emerald-700 border-emerald-200"
+                  }`}>
+                    {restockSplitUnits ? "Separate Tracking IDs" : "Combined Existing SKU"}
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setRestockSplitUnits(true)}
+                    className={`p-2.5 rounded-xl border text-left transition cursor-pointer ${
+                      restockSplitUnits
+                        ? "border-blue-600 bg-blue-50 text-blue-900 shadow-2xs font-bold"
+                        : "border-slate-200 bg-white text-slate-700 hover:bg-slate-100"
+                    }`}
+                  >
+                    <div className="flex items-center gap-1.5 text-xs font-bold text-blue-900">
+                      <Barcode className="w-4 h-4 text-blue-600 shrink-0" />
+                      <span>Separate ID per Unit</span>
+                    </div>
+                    <span className="inline-block mt-0.5 px-1.5 py-0.2 rounded bg-blue-200/70 text-blue-950 text-[9px] font-black uppercase">
+                      Recommended
+                    </span>
+                    <p className="text-[10px] text-slate-500 mt-1 leading-snug">
+                      Generates unique IDs (e.g. <code>RRTS-ITM-1002</code>, <code>1003</code>) for each unit. Ideal for laptops, phones &amp; serialized stock.
+                    </p>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setRestockSplitUnits(false)}
+                    className={`p-2.5 rounded-xl border text-left transition cursor-pointer ${
+                      !restockSplitUnits
+                        ? "border-emerald-600 bg-emerald-50 text-emerald-900 shadow-2xs font-bold"
+                        : "border-slate-200 bg-white text-slate-700 hover:bg-slate-100"
+                    }`}
+                  >
+                    <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-900">
+                      <Layers className="w-4 h-4 text-emerald-600 shrink-0" />
+                      <span>Combined Quantity</span>
+                    </div>
+                    <span className="inline-block mt-0.5 px-1.5 py-0.2 rounded bg-emerald-200/70 text-emerald-950 text-[9px] font-black uppercase">
+                      Bulk Stock
+                    </span>
+                    <p className="text-[10px] text-slate-500 mt-1 leading-snug">
+                      Increments +Qty on existing SKU (<code>{selectedItemForRestock.code}</code>). Best for bulk cables, screws or accessories.
+                    </p>
+                  </button>
+                </div>
               </div>
-            </form>
+
+              </form>
+            </div>
+
+            {/* Pinned Sticky Footer (Action Buttons Always Visible) */}
+            <div className="p-3 sm:p-4 border-t border-slate-100 bg-slate-50 flex items-center justify-end gap-2.5 shrink-0">
+              <button
+                type="button"
+                onClick={() => setSelectedItemForRestock(null)}
+                className="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                form="restock-form"
+                disabled={restockSubmitting}
+                className="inline-flex items-center gap-1.5 px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-xs transition cursor-pointer disabled:opacity-50"
+              >
+                {restockSubmitting ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    <span>Restocking...</span>
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    <span>Confirm Restock (+{restockQty || 1} Units)</span>
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         </div>
       )}
