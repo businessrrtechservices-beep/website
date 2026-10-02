@@ -43,6 +43,7 @@ export default function AdminInventoryPage() {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isSubcategoryModalOpen, setIsSubcategoryModalOpen] = useState(false);
   const [selectedItemForAudit, setSelectedItemForAudit] = useState<InventoryItem | null>(null);
+  const [auditTab, setAuditTab] = useState<"units" | "batches" | "allocations">("units");
 
   // 1-Click Restock Modal State
   const [selectedItemForRestock, setSelectedItemForRestock] = useState<InventoryItem | null>(null);
@@ -55,7 +56,6 @@ export default function AdminInventoryPage() {
   const [restockDealerId, setRestockDealerId] = useState("");
   const [restockPartnerId, setRestockPartnerId] = useState("");
   const [restockSerials, setRestockSerials] = useState("");
-  const [restockSplitUnits, setRestockSplitUnits] = useState(true);
   const [restockSubmitting, setRestockSubmitting] = useState(false);
   const [restockError, setRestockError] = useState<string | null>(null);
   const [partnerWallets, setPartnerWallets] = useState<any[]>([]);
@@ -225,7 +225,6 @@ export default function AdminInventoryPage() {
     setRestockPaymentRef("");
     setRestockDealerId(item.dealerId || "");
     setRestockSerials("");
-    setRestockSplitUnits(true);
     setRestockError(null);
     if (partnerWallets.length > 0 && !restockPartnerId) {
       setRestockPartnerId(partnerWallets[0].id);
@@ -264,7 +263,6 @@ export default function AdminInventoryPage() {
           partnerId: restockFinanceMode === "partner_borrowing" ? restockPartnerId : undefined,
           partnerName: restockFinanceMode === "partner_borrowing" ? selectedPartner?.name : undefined,
           serialNumbers: restockSerials ? restockSerials.split(/[\n,]+/).map((s) => s.trim()).filter(Boolean) : [],
-          splitUnits: restockSplitUnits,
         }),
       });
 
@@ -747,11 +745,15 @@ export default function AdminInventoryPage() {
                       {/* Allocation Audit */}
                       <td className="py-3 px-4 text-center whitespace-nowrap">
                         <button
-                          onClick={() => setSelectedItemForAudit(item)}
-                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 text-[11px] font-bold transition cursor-pointer"
+                          onClick={() => {
+                            setSelectedItemForAudit(item);
+                            setAuditTab("units");
+                          }}
+                          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 text-[11px] font-bold transition cursor-pointer border border-blue-200/60"
+                          title="View individual unit IDs, restock history, and invoice allocations"
                         >
-                          <Users className="w-3 h-3" />
-                          <span>Who has this? ({item.allocatedRecords?.length || 0})</span>
+                          <Barcode className="w-3.5 h-3.5 text-blue-600" />
+                          <span>Units &amp; Tracking ({item.availableQuantity}/{item.stockQuantity})</span>
                         </button>
                       </td>
 
@@ -785,102 +787,305 @@ export default function AdminInventoryPage() {
         )}
       </div>
 
-      {/* Allocation Audit Modal (Who has this stock item?) */}
-      {selectedItemForAudit && (
-        <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-xl max-w-2xl w-full overflow-hidden animate-slide-down">
-            <div className="flex items-center justify-between p-5 border-b border-slate-100">
-              <div>
-                <span className="font-mono text-xs font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
-                  {selectedItemForAudit.code}
-                </span>
-                {selectedItemForAudit.dealerName && (
-                  <span className="ml-2 inline-flex items-center gap-1 font-sans text-xs font-semibold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200">
-                    <Truck className="w-3 h-3" /> Supplier: {selectedItemForAudit.dealerName}
-                  </span>
-                )}
-                <h3 className="mt-1 text-base font-black text-slate-900">
-                  Stock Allocation History &bull; {selectedItemForAudit.name}
-                </h3>
-                <p className="text-xs text-slate-500 font-medium">
-                  {selectedItemForAudit.availableQuantity} of {selectedItemForAudit.stockQuantity} units available on shelf
-                </p>
+      {/* Stock Allocation & Individual Unit Tracking Modal */}
+      {selectedItemForAudit && (() => {
+        const displayUnits = (() => {
+          if (selectedItemForAudit.unitTracking && selectedItemForAudit.unitTracking.length > 0) {
+            return selectedItemForAudit.unitTracking;
+          }
+          const stockQty = selectedItemForAudit.stockQuantity || 1;
+          const availQty = typeof selectedItemForAudit.availableQuantity === "number" ? selectedItemForAudit.availableQuantity : stockQty;
+          const allocatedQty = Math.max(0, stockQty - availQty);
+          const serials = selectedItemForAudit.serialNumbers || [];
+          const list = [];
+          for (let i = 0; i < stockQty; i++) {
+            const isAlloc = i < allocatedQty;
+            const allocRec = selectedItemForAudit.allocatedRecords?.[0];
+            list.push({
+              unitId: serials[i] || `${selectedItemForAudit.code}-U${i + 1}`,
+              serialNumber: serials[i],
+              dateAdded: selectedItemForAudit.createdAt ? new Date(selectedItemForAudit.createdAt).toLocaleDateString("en-IN") : "Initial Stock",
+              purchasePrice: selectedItemForAudit.purchasePrice || 0,
+              status: isAlloc ? ("allocated" as const) : ("available" as const),
+              allocatedInvoiceNumber: isAlloc ? allocRec?.invoiceNumber : undefined,
+              allocatedCustomerName: isAlloc ? allocRec?.customerName : undefined,
+            });
+          }
+          return list;
+        })();
+
+        const restocks = selectedItemForAudit.restockHistory || [];
+        const allocations = selectedItemForAudit.allocatedRecords || [];
+
+        return (
+          <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4">
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-xl max-w-2xl w-full max-h-[85vh] flex flex-col overflow-hidden animate-slide-down">
+              {/* Modal Header */}
+              <div className="flex items-center justify-between p-4 sm:p-5 border-b border-slate-100 shrink-0 bg-white">
+                <div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-mono text-xs font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
+                      {selectedItemForAudit.code}
+                    </span>
+                    {selectedItemForAudit.dealerName && (
+                      <span className="inline-flex items-center gap-1 font-sans text-xs font-semibold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200">
+                        <Truck className="w-3 h-3" /> Supplier: {selectedItemForAudit.dealerName}
+                      </span>
+                    )}
+                  </div>
+                  <h3 className="mt-1 text-base font-black text-slate-900">
+                    Stock &amp; Unit Tracking &bull; {selectedItemForAudit.name}
+                  </h3>
+                  <p className="text-xs text-slate-500 font-medium">
+                    {selectedItemForAudit.availableQuantity} available of {selectedItemForAudit.stockQuantity} total units in shop
+                  </p>
+                </div>
+                <button
+                  onClick={() => setSelectedItemForAudit(null)}
+                  className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
               </div>
-              <button
-                onClick={() => setSelectedItemForAudit(null)}
-                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition cursor-pointer"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
 
-            <div className="p-5 max-h-[60vh] overflow-y-auto space-y-4">
-              {(!selectedItemForAudit.allocatedRecords || selectedItemForAudit.allocatedRecords.length === 0) ? (
-                <div className="p-8 text-center text-slate-500 text-xs">
-                  <CheckCircle2 className="w-8 h-8 text-emerald-500 mx-auto mb-2" />
-                  <p className="font-bold text-slate-800">All {selectedItemForAudit.stockQuantity} units currently in shop</p>
-                  <p className="text-slate-400 mt-1">No units of this item have been sold or allocated yet.</p>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  <span className="text-xs font-bold uppercase tracking-wider text-slate-500 block">
-                    Customer Allocation Records ({selectedItemForAudit.allocatedRecords.length})
-                  </span>
-                  {selectedItemForAudit.allocatedRecords.map((record, index) => (
-                    <div
-                      key={index}
-                      className="p-4 rounded-xl border border-slate-200 bg-slate-50/70 space-y-2 text-xs"
-                    >
-                      <div className="flex items-center justify-between flex-wrap gap-2">
-                        <div className="flex items-center gap-2">
-                          <span className="font-bold text-slate-900 text-sm">{record.customerName}</span>
-                          <span className="text-slate-500 font-mono text-[11px]">{record.customerPhone}</span>
-                        </div>
-                        <span className="font-mono text-xs font-bold text-blue-700 bg-white px-2 py-0.5 rounded border border-blue-200">
-                          Invoice: {record.invoiceNumber}
-                        </span>
-                      </div>
+              {/* Navigation Tabs */}
+              <div className="flex border-b border-slate-200 bg-slate-50/70 px-4 pt-2 gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setAuditTab("units")}
+                  className={`pb-2 px-3 text-xs font-bold border-b-2 flex items-center gap-1.5 transition cursor-pointer ${
+                    auditTab === "units"
+                      ? "border-blue-600 text-blue-700"
+                      : "border-transparent text-slate-500 hover:text-slate-700"
+                  }`}
+                >
+                  <Barcode className="w-3.5 h-3.5" />
+                  <span>Physical Units ({displayUnits.length})</span>
+                </button>
 
-                      <div className="flex items-center gap-4 text-slate-600 flex-wrap">
-                        <div>
-                          <span className="text-slate-400">Allocated Units: </span>
-                          <span className="font-bold text-slate-900">{record.quantity}</span>
-                        </div>
-                        <div>
-                          <span className="text-slate-400">Sold Price: </span>
-                          <span className="font-bold text-emerald-700">₹{record.sellingPrice?.toLocaleString("en-IN")}</span>
-                        </div>
-                        <div>
-                          <span className="text-slate-400">Date: </span>
-                          <span>{record.date}</span>
-                        </div>
-                      </div>
+                <button
+                  type="button"
+                  onClick={() => setAuditTab("batches")}
+                  className={`pb-2 px-3 text-xs font-bold border-b-2 flex items-center gap-1.5 transition cursor-pointer ${
+                    auditTab === "batches"
+                      ? "border-blue-600 text-blue-700"
+                      : "border-transparent text-slate-500 hover:text-slate-700"
+                  }`}
+                >
+                  <Boxes className="w-3.5 h-3.5" />
+                  <span>Restock Batches ({restocks.length})</span>
+                </button>
 
-                      {record.serialNumbers && record.serialNumbers.length > 0 && (
-                        <div className="pt-1 border-t border-slate-200/80">
-                          <span className="text-slate-400 font-medium">Assigned Serial Numbers: </span>
-                          <span className="font-mono font-bold text-blue-800">
-                            {record.serialNumbers.join(", ")}
-                          </span>
-                        </div>
-                      )}
+                <button
+                  type="button"
+                  onClick={() => setAuditTab("allocations")}
+                  className={`pb-2 px-3 text-xs font-bold border-b-2 flex items-center gap-1.5 transition cursor-pointer ${
+                    auditTab === "allocations"
+                      ? "border-blue-600 text-blue-700"
+                      : "border-transparent text-slate-500 hover:text-slate-700"
+                  }`}
+                >
+                  <FileText className="w-3.5 h-3.5" />
+                  <span>Invoice Allocations ({allocations.length})</span>
+                </button>
+              </div>
+
+              {/* Scrollable Tab Body */}
+              <div className="p-4 sm:p-5 overflow-y-auto flex-1 space-y-3">
+                {/* TAB 1: Individual Physical Units Tracking */}
+                {auditTab === "units" && (
+                  <div className="space-y-2.5">
+                    <p className="text-[11px] text-slate-500 font-medium">
+                      Every physical piece of this item has a distinct Unit ID. Track whether each unit is in the shop or sold on an invoice:
+                    </p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      {displayUnits.map((u, i) => {
+                        const isAvailable = u.status === "available";
+                        return (
+                          <div
+                            key={i}
+                            className={`p-3 rounded-xl border text-xs space-y-1.5 ${
+                              isAvailable
+                                ? "bg-emerald-50/50 border-emerald-200"
+                                : "bg-slate-50 border-slate-200 opacity-90"
+                            }`}
+                          >
+                            <div className="flex items-center justify-between gap-1.5">
+                              <span className="font-mono font-bold text-slate-900 bg-white px-2 py-0.5 rounded border border-slate-200">
+                                {u.unitId}
+                              </span>
+                              <span
+                                className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                                  isAvailable
+                                    ? "bg-emerald-100 text-emerald-800"
+                                    : "bg-blue-100 text-blue-800"
+                                }`}
+                              >
+                                {isAvailable ? "✓ In Shop" : "Sold"}
+                              </span>
+                            </div>
+
+                            {u.serialNumber && u.serialNumber !== u.unitId && (
+                              <div className="text-[11px] text-slate-600">
+                                Serial / IMEI: <strong className="font-mono">{u.serialNumber}</strong>
+                              </div>
+                            )}
+
+                            <div className="flex items-center justify-between text-[11px] text-slate-500 border-t border-slate-200/60 pt-1">
+                              <span>Cost: ₹{u.purchasePrice?.toLocaleString("en-IN") || 0}</span>
+                              {isAvailable ? (
+                                <span className="text-emerald-700 font-semibold">Ready to Sell</span>
+                              ) : (
+                                <span className="text-blue-700 font-semibold truncate max-w-[130px]">
+                                  Inv: {u.allocatedInvoiceNumber || "Sold"}
+                                </span>
+                              )}
+                            </div>
+
+                            {u.allocatedCustomerName && (
+                              <div className="text-[10.5px] text-slate-600 truncate bg-white/70 p-1 rounded">
+                                Customer: <strong>{u.allocatedCustomerName}</strong>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
-                  ))}
-                </div>
-              )}
-            </div>
+                  </div>
+                )}
 
-            <div className="p-4 border-t border-slate-100 flex justify-end bg-slate-50">
-              <button
-                onClick={() => setSelectedItemForAudit(null)}
-                className="px-4 py-2 rounded-xl bg-white border border-slate-200 text-xs font-bold text-slate-700 hover:bg-slate-100 transition cursor-pointer"
-              >
-                Close
-              </button>
+                {/* TAB 2: Restock Batches Log */}
+                {auditTab === "batches" && (
+                  <div className="space-y-3">
+                    {restocks.length === 0 ? (
+                      <div className="p-8 text-center text-slate-500 text-xs">
+                        <CheckCircle2 className="w-8 h-8 text-blue-500 mx-auto mb-2" />
+                        <p className="font-bold text-slate-800">Initial Stock (No Restocks Yet)</p>
+                        <p className="text-slate-400 mt-1">This item is currently on its initial inventory batch.</p>
+                      </div>
+                    ) : (
+                      restocks.map((batch, index) => (
+                        <div
+                          key={index}
+                          className="p-3.5 rounded-xl border border-slate-200 bg-slate-50/70 text-xs space-y-2"
+                        >
+                          <div className="flex items-center justify-between flex-wrap gap-2">
+                            <div className="flex items-center gap-2">
+                              <span className="font-mono font-bold text-blue-700 bg-blue-100/70 px-2 py-0.5 rounded">
+                                {batch.id}
+                              </span>
+                              <span className="font-bold text-slate-900">+{batch.quantity} Units Added</span>
+                            </div>
+                            <span className="text-slate-500 font-mono text-[11px]">
+                              {batch.date ? new Date(batch.date).toLocaleString("en-IN") : ""}
+                            </span>
+                          </div>
+
+                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px] text-slate-600 pt-1 border-t border-slate-200/80">
+                            <div>
+                              <span className="text-slate-400 block">Unit Cost:</span>
+                              <strong className="text-slate-900">₹{batch.purchasePrice?.toLocaleString("en-IN")}</strong>
+                            </div>
+                            <div>
+                              <span className="text-slate-400 block">Total Cost:</span>
+                              <strong className="text-emerald-700 font-mono">
+                                ₹{((batch.quantity || 1) * (batch.purchasePrice || 0)).toLocaleString("en-IN")}
+                              </strong>
+                            </div>
+                            <div>
+                              <span className="text-slate-400 block">Supplier:</span>
+                              <span>{batch.dealerName || "Direct"}</span>
+                            </div>
+                            <div>
+                              <span className="text-slate-400 block">Funding:</span>
+                              <span className="font-semibold text-slate-800 uppercase text-[10px]">
+                                {batch.financeMode || "wallet"}
+                              </span>
+                            </div>
+                          </div>
+
+                          {batch.unitIds && batch.unitIds.length > 0 && (
+                            <div className="pt-1 text-[11px] text-slate-600">
+                              <span className="text-slate-400">Assigned Unit IDs: </span>
+                              <span className="font-mono text-blue-800 font-semibold">
+                                {batch.unitIds.join(", ")}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      ))
+                    )}
+                  </div>
+                )}
+
+                {/* TAB 3: Customer Allocations */}
+                {auditTab === "allocations" && (
+                  <div className="space-y-3">
+                    {allocations.length === 0 ? (
+                      <div className="p-8 text-center text-slate-500 text-xs">
+                        <CheckCircle2 className="w-8 h-8 text-emerald-500 mx-auto mb-2" />
+                        <p className="font-bold text-slate-800">All units available in shop</p>
+                        <p className="text-slate-400 mt-1">No units of this item have been sold or allocated yet.</p>
+                      </div>
+                    ) : (
+                      allocations.map((record, index) => (
+                        <div
+                          key={index}
+                          className="p-3.5 rounded-xl border border-slate-200 bg-slate-50/70 space-y-2 text-xs"
+                        >
+                          <div className="flex items-center justify-between flex-wrap gap-2">
+                            <div className="flex items-center gap-2">
+                              <span className="font-bold text-slate-900">{record.customerName}</span>
+                              <span className="text-slate-500 font-mono text-[11px]">{record.customerPhone}</span>
+                            </div>
+                            <span className="font-mono text-xs font-bold text-blue-700 bg-white px-2 py-0.5 rounded border border-blue-200">
+                              Invoice: {record.invoiceNumber}
+                            </span>
+                          </div>
+
+                          <div className="flex items-center gap-4 text-slate-600 flex-wrap text-[11px]">
+                            <div>
+                              <span className="text-slate-400">Sold Units: </span>
+                              <strong className="text-slate-900">{record.quantity}</strong>
+                            </div>
+                            <div>
+                              <span className="text-slate-400">Sold Price: </span>
+                              <strong className="text-emerald-700">₹{record.sellingPrice?.toLocaleString("en-IN")}</strong>
+                            </div>
+                            <div>
+                              <span className="text-slate-400">Date: </span>
+                              <span>{record.date}</span>
+                            </div>
+                          </div>
+
+                          {record.serialNumbers && record.serialNumbers.length > 0 && (
+                            <div className="pt-1 border-t border-slate-200/80 text-[11px]">
+                              <span className="text-slate-400">Sold Serials: </span>
+                              <span className="font-mono font-bold text-blue-800">
+                                {record.serialNumbers.join(", ")}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      ))
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Pinned Footer */}
+              <div className="p-3.5 sm:p-4 border-t border-slate-100 bg-slate-50 flex justify-end shrink-0">
+                <button
+                  onClick={() => setSelectedItemForAudit(null)}
+                  className="px-4 py-2 rounded-xl bg-white border border-slate-200 text-xs font-bold text-slate-700 hover:bg-slate-100 transition cursor-pointer"
+                >
+                  Close
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* Add New Stock Item Modal */}
       {isAddModalOpen && (
@@ -1902,63 +2107,14 @@ export default function AdminInventoryPage() {
                 />
               </div>
 
-              {/* Item Tracking & SKU ID Assignment Mode */}
-              <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 space-y-2">
-                <div className="flex items-center justify-between">
-                  <label className="block text-[11px] font-bold text-slate-800 uppercase tracking-wider">
-                    Item Tracking &amp; SKU ID Assignment
-                  </label>
-                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${
-                    restockSplitUnits
-                      ? "bg-blue-50 text-blue-700 border-blue-200"
-                      : "bg-emerald-50 text-emerald-700 border-emerald-200"
-                  }`}>
-                    {restockSplitUnits ? "Separate Tracking IDs" : "Combined Existing SKU"}
+              {/* Unit Tracking Note */}
+              <div className="p-3 rounded-xl bg-blue-50/80 border border-blue-200 text-xs flex items-start gap-2.5">
+                <Barcode className="w-4 h-4 text-blue-700 shrink-0 mt-0.5" />
+                <div>
+                  <span className="font-bold text-blue-950 block">Single Product Entry with Individual Unit Tracking:</span>
+                  <span className="text-[11px] text-blue-800 leading-snug">
+                    Restock updates this same inventory entry (+{restockQty || 1} units). Each unit is assigned its own distinct Unit ID &amp; serial tracker internally so you can trace individual unit sales and warranties without duplicate product rows.
                   </span>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setRestockSplitUnits(true)}
-                    className={`p-2.5 rounded-xl border text-left transition cursor-pointer ${
-                      restockSplitUnits
-                        ? "border-blue-600 bg-blue-50 text-blue-900 shadow-2xs font-bold"
-                        : "border-slate-200 bg-white text-slate-700 hover:bg-slate-100"
-                    }`}
-                  >
-                    <div className="flex items-center gap-1.5 text-xs font-bold text-blue-900">
-                      <Barcode className="w-4 h-4 text-blue-600 shrink-0" />
-                      <span>Separate ID per Unit</span>
-                    </div>
-                    <span className="inline-block mt-0.5 px-1.5 py-0.2 rounded bg-blue-200/70 text-blue-950 text-[9px] font-black uppercase">
-                      Recommended
-                    </span>
-                    <p className="text-[10px] text-slate-500 mt-1 leading-snug">
-                      Generates unique IDs (e.g. <code>RRTS-ITM-1002</code>, <code>1003</code>) for each unit. Ideal for laptops, phones &amp; serialized stock.
-                    </p>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setRestockSplitUnits(false)}
-                    className={`p-2.5 rounded-xl border text-left transition cursor-pointer ${
-                      !restockSplitUnits
-                        ? "border-emerald-600 bg-emerald-50 text-emerald-900 shadow-2xs font-bold"
-                        : "border-slate-200 bg-white text-slate-700 hover:bg-slate-100"
-                    }`}
-                  >
-                    <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-900">
-                      <Layers className="w-4 h-4 text-emerald-600 shrink-0" />
-                      <span>Combined Quantity</span>
-                    </div>
-                    <span className="inline-block mt-0.5 px-1.5 py-0.2 rounded bg-emerald-200/70 text-emerald-950 text-[9px] font-black uppercase">
-                      Bulk Stock
-                    </span>
-                    <p className="text-[10px] text-slate-500 mt-1 leading-snug">
-                      Increments +Qty on existing SKU (<code>{selectedItemForRestock.code}</code>). Best for bulk cables, screws or accessories.
-                    </p>
-                  </button>
                 </div>
               </div>
 

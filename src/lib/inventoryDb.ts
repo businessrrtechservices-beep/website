@@ -220,10 +220,55 @@ export async function allocateStockItem(
   const currentAvailable = typeof item.availableQuantity === "number" ? item.availableQuantity : item.stockQuantity;
   const newAvailable = Math.max(0, currentAvailable - record.quantity);
 
+  // Update status in unitTracking if present
+  let updatedUnits = item.unitTracking ? [...item.unitTracking] : undefined;
+  if (updatedUnits && updatedUnits.length > 0) {
+    let toAllocate = record.quantity;
+    const reqSerials = record.serialNumbers || [];
+
+    // Match by serial number first if specified
+    if (reqSerials.length > 0) {
+      for (const unit of updatedUnits) {
+        if (unit.status === "available" && toAllocate > 0) {
+          if (unit.serialNumber && reqSerials.includes(unit.serialNumber)) {
+            unit.status = "allocated";
+            unit.allocatedInvoiceId = record.invoiceId;
+            unit.allocatedInvoiceNumber = record.invoiceNumber;
+            unit.allocatedCustomerName = record.customerName;
+            unit.allocatedCustomerPhone = record.customerPhone;
+            unit.allocatedDate = record.date;
+            toAllocate--;
+          }
+        }
+      }
+    }
+
+    // Allocate remaining count to available units
+    for (const unit of updatedUnits) {
+      if (unit.status === "available" && toAllocate > 0) {
+        unit.status = "allocated";
+        unit.allocatedInvoiceId = record.invoiceId;
+        unit.allocatedInvoiceNumber = record.invoiceNumber;
+        unit.allocatedCustomerName = record.customerName;
+        unit.allocatedCustomerPhone = record.customerPhone;
+        unit.allocatedDate = record.date;
+        toAllocate--;
+      }
+    }
+  }
+
+  const updateDoc: any = {
+    availableQuantity: newAvailable,
+    updatedAt: new Date(),
+  };
+  if (updatedUnits) {
+    updateDoc.unitTracking = updatedUnits;
+  }
+
   const result = await collection.updateOne(
     { $or: [{ id: itemId }, { _id: itemId } as any] },
     {
-      $set: { availableQuantity: newAvailable, updatedAt: new Date() },
+      $set: updateDoc,
       $push: { allocatedRecords: record as any },
     }
   );

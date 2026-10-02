@@ -124,84 +124,117 @@ export async function POST(
       }
     }
 
-    // 3. Stock Update: Increment Existing Item vs Split Units
-    const splitUnits = Boolean(body.splitUnits);
+    // 3. Stock Update: Keep in SAME item while tracking each unit & batch separately
+    const currentStock = Number(originalItem.stockQuantity) || 0;
+    const currentAvailable = typeof originalItem.availableQuantity === "number" ? originalItem.availableQuantity : currentStock;
 
-    if (splitUnits) {
-      // Create new unit items with unique RRTS item codes
-      const createdBatch = [];
-      for (let i = 0; i < addedQty; i++) {
-        const unitItem = await createInventoryItem({
-          name: originalItem.name,
-          category: originalItem.category,
-          subcategory: originalItem.subcategory || "General",
-          brand: originalItem.brand || "",
-          model: originalItem.model || "",
-          condition: originalItem.condition || "Brand New",
-          serialNumbers: serialList[i] ? [serialList[i]] : [],
-          specs: originalItem.specs || {},
-          purchasePrice,
-          sellingPrice,
-          stockQuantity: 1,
-          dealerId,
-          dealerName,
-          boughtOnCredit: financeMode === "credit",
-          location: originalItem.location || "",
-          notes: body.notes || originalItem.notes || "",
+    const newStockQuantity = currentStock + addedQty;
+    const newAvailableQuantity = currentAvailable + addedQty;
+
+    // Existing unit tracking array or backfilled from original stock
+    let unitTracking: any[] = Array.isArray(originalItem.unitTracking) ? [...originalItem.unitTracking] : [];
+    if (unitTracking.length === 0 && currentStock > 0) {
+      // Backfill initial stock units
+      const existingSerials = Array.isArray(originalItem.serialNumbers) ? originalItem.serialNumbers : [];
+      const allocatedRecords = Array.isArray(originalItem.allocatedRecords) ? originalItem.allocatedRecords : [];
+      let totalAllocated = allocatedRecords.reduce((acc: number, r: any) => acc + (r.quantity || 0), 0);
+
+      for (let i = 0; i < currentStock; i++) {
+        const isAllocated = i < totalAllocated;
+        unitTracking.push({
+          unitId: existingSerials[i] || `${originalItem.code}-U${i + 1}`,
+          serialNumber: existingSerials[i] || undefined,
+          restockBatchId: "INITIAL-STOCK",
+          dateAdded: originalItem.createdAt ? new Date(originalItem.createdAt).toISOString() : nowIST,
+          purchasePrice: originalItem.purchasePrice || 0,
+          sellingPrice: originalItem.sellingPrice || 0,
+          status: isAllocated ? "allocated" : "available",
         });
-        createdBatch.push(unitItem);
       }
+    }
 
-      return NextResponse.json({
-        success: true,
-        restockedType: "batch",
-        count: createdBatch.length,
-        items: createdBatch,
-        message: `Restocked ${createdBatch.length} new units for ${originalItem.name}`,
-      });
-    } else {
-      // Increment existing SKU quantity
-      const currentStock = Number(originalItem.stockQuantity) || 0;
-      const currentAvailable = typeof originalItem.availableQuantity === "number" ? originalItem.availableQuantity : currentStock;
+    const startUnitIndex = unitTracking.length;
+    const batchId = `RST-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+    const newUnits: any[] = [];
 
-      const newStockQuantity = currentStock + addedQty;
-      const newAvailableQuantity = currentAvailable + addedQty;
-
-      const updateDoc: any = {
-        stockQuantity: newStockQuantity,
-        availableQuantity: newAvailableQuantity,
+    for (let i = 0; i < addedQty; i++) {
+      const serial = serialList[i] || undefined;
+      const unitId = serial || `${originalItem.code}-U${startUnitIndex + i + 1}`;
+      const unitObj = {
+        unitId,
+        serialNumber: serial,
+        restockBatchId: batchId,
+        dateAdded: nowIST,
         purchasePrice,
         sellingPrice,
-        updatedAt: new Date(),
+        status: "available",
       };
-
-      if (dealerId) updateDoc.dealerId = dealerId;
-      if (dealerName) updateDoc.dealerName = dealerName;
-
-      if (serialList.length > 0) {
-        updateDoc.$push = { serialNumbers: { $each: serialList } };
-      }
-
-      await itemsCol.updateOne(
-        { $or: [{ id }, { _id: id } as any] },
-        {
-          $set: updateDoc,
-          ...(serialList.length > 0 ? { $addToSet: { serialNumbers: { $each: serialList } } } : {}),
-        }
-      );
-
-      const updated = await itemsCol.findOne({ $or: [{ id }, { _id: id } as any] });
-
-      return NextResponse.json({
-        success: true,
-        restockedType: "increment",
-        item: updated,
-        addedQuantity: addedQty,
-        newStockQuantity,
-        newAvailableQuantity,
-        message: `Restocked +${addedQty} units for ${originalItem.name}. Total available: ${newAvailableQuantity}`,
-      });
+      newUnits.push(unitObj);
+      unitTracking.push(unitObj);
     }
+
+    // Restock Batch record
+    const restockBatch = {
+      id: batchId,
+      date: nowIST,
+      quantity: addedQty,
+      purchasePrice,
+      sellingPrice,
+      financeMode,
+      dealerId,
+      dealerName,
+      partnerId,
+      partnerName,
+      paymentMode,
+      paymentRef,
+      serialNumbers: serialList,
+      unitIds: newUnits.map((u) => u.unitId),
+      notes: body.notes || "",
+    };
+
+    const restockHistory = Array.isArray(originalItem.restockHistory)
+      ? [...originalItem.restockHistory, restockBatch]
+      : [restockBatch];
+
+    // Combined unique serial numbers
+    const allSerials = Array.from(
+      new Set([
+        ...(Array.isArray(originalItem.serialNumbers) ? originalItem.serialNumbers : []),
+        ...serialList,
+      ])
+    );
+
+    const updateDoc: any = {
+      stockQuantity: newStockQuantity,
+      availableQuantity: newAvailableQuantity,
+      purchasePrice,
+      sellingPrice,
+      serialNumbers: allSerials,
+      unitTracking,
+      restockHistory,
+      updatedAt: new Date(),
+    };
+
+    if (dealerId) updateDoc.dealerId = dealerId;
+    if (dealerName) updateDoc.dealerName = dealerName;
+
+    await itemsCol.updateOne(
+      { $or: [{ id }, { _id: id } as any] },
+      { $set: updateDoc }
+    );
+
+    const updated = await itemsCol.findOne({ $or: [{ id }, { _id: id } as any] });
+
+    return NextResponse.json({
+      success: true,
+      item: updated,
+      addedQuantity: addedQty,
+      newStockQuantity,
+      newAvailableQuantity,
+      batchId,
+      newUnits,
+      message: `Restocked +${addedQty} units for ${originalItem.name}. Total available in same item: ${newAvailableQuantity}`,
+    });
   } catch (error: any) {
     console.error("Error in POST /api/inventory/items/[id]/restock:", error);
     return NextResponse.json(
