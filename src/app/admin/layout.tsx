@@ -22,6 +22,7 @@ import {
   Receipt,
   Handshake,
   Truck,
+  CreditCard,
 } from "lucide-react";
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
@@ -91,6 +92,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const navItems = [
     { label: "Dashboard", href: "/admin", icon: LayoutDashboard },
     { label: "Wallet & Ledger", href: "/admin/ledger", icon: Wallet },
+    { label: "Company Expenses", href: "/admin/expenses", icon: CreditCard },
     { label: "Dealers & Suppliers", href: "/admin/dealers", icon: Truck },
     { label: "Partners & Investment", href: "/admin/borrowing", icon: Handshake },
     { label: "Stock & Inventory", href: "/admin/inventory", icon: Boxes },

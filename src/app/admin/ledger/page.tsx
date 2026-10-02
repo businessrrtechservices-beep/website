@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Link from "next/link";
 import {
   Wallet,
   ArrowUpRight,
@@ -860,6 +861,22 @@ export default function AdminLedgerPage() {
                       )}
                     </div>
                   )}
+
+                  {/* Flag 3 Panel: Shop & Digital Operating Expenses */}
+                  {debitFlag === "expense" && (
+                    <div className="p-3.5 rounded-xl bg-rose-50/80 border border-rose-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+                      <div>
+                        <span className="font-bold text-rose-900 block">General Shop &amp; Operating Expense</span>
+                        <span className="text-[11px] text-rose-700">Debits cash/bank wallet. For dedicated Meta Ads &amp; Domain analytics, visit Company Expenses.</span>
+                      </div>
+                      <Link
+                        href="/admin/expenses"
+                        className="px-2.5 py-1 rounded-lg bg-white border border-rose-300 text-rose-700 font-bold text-xs hover:bg-rose-100 transition whitespace-nowrap self-start sm:self-auto"
+                      >
+                        Company Expenses &rarr;
+                      </Link>
+                    </div>
+                  )}
                 </div>
               ) : (
                 /* Credit (Cash In) Options */
@@ -950,6 +967,9 @@ export default function AdminLedgerPage() {
                         <option value="Stock Purchase">Stock / Accessory Purchase</option>
                         <option value="Spare Parts">Spare Parts (IC, Screen, SSD)</option>
                         <option value="Office Expense">Shop Rent / Electricity / Bills</option>
+                        <option value="Meta & Digital Ads">Meta &amp; Digital Ads</option>
+                        <option value="Domains & Hosting">Domains &amp; Hosting</option>
+                        <option value="Software & Tools">Software, SaaS &amp; Tools</option>
                         <option value="Owner Withdrawal">Owner Personal Withdrawal</option>
                         <option value="Tool Purchase">Tools &amp; Equipment</option>
                         <option value="Other">Other Expense</option>

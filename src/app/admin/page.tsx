@@ -32,6 +32,7 @@ import {
   Handshake,
   UploadCloud,
   ImageIcon,
+  CreditCard,
 } from "lucide-react";
 
 export default function AdminDashboardPage() {
@@ -42,6 +43,7 @@ export default function AdminDashboardPage() {
   const [walletBalance, setWalletBalance] = useState(0);
   const [totalSalesRevenue, setTotalSalesRevenue] = useState(0);
   const [stockItemCount, setStockItemCount] = useState(0);
+  const [totalCompanyExpenses, setTotalCompanyExpenses] = useState(0);
 
   // Sales and Invoices Status Lifecycle State
   const [salesInvoices, setSalesInvoices] = useState<any[]>([]);
@@ -74,7 +76,7 @@ export default function AdminDashboardPage() {
   const fetchDashboardData = async () => {
     setLoading(true);
     try {
-      const [analyticsRes, heroRes, productsRes, ledgerRes, salesRes, inventoryRes, borrowingRes] = await Promise.all([
+      const [analyticsRes, heroRes, productsRes, ledgerRes, salesRes, inventoryRes, borrowingRes, expensesRes] = await Promise.all([
         fetch("/api/analytics/stats"),
         fetch("/api/hero"),
         fetch("/api/products"),
@@ -82,6 +84,7 @@ export default function AdminDashboardPage() {
         fetch("/api/sales"),
         fetch("/api/inventory/items"),
         fetch("/api/borrowing"),
+        fetch("/api/expenses"),
       ]);
 
       if (analyticsRes.ok) {
@@ -113,6 +116,10 @@ export default function AdminDashboardPage() {
       if (borrowingRes.ok) {
         const data = await borrowingRes.json();
         setPartnerSummary(data.summary || {});
+      }
+      if (expensesRes.ok) {
+        const data = await expensesRes.json();
+        setTotalCompanyExpenses(data.summary?.totalExpense || 0);
       }
     } catch (err) {
       console.error("Dashboard data load error:", err);
@@ -452,6 +459,37 @@ export default function AdminDashboardPage() {
             </p>
           </div>
         </div>
+
+        {/* Company Expenses Card */}
+        <Link
+          href="/admin/expenses"
+          className="p-5 rounded-2xl bg-white border border-slate-200 hover:border-purple-400 transition shadow-2xs group flex flex-col justify-between sm:col-span-2 lg:col-span-4"
+        >
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div className="p-2 rounded-xl bg-purple-50 text-purple-600 group-hover:bg-purple-600 group-hover:text-white transition">
+                <CreditCard className="w-4 h-4" />
+              </div>
+              <div>
+                <span className="text-xs font-bold uppercase tracking-wider text-slate-500 block">
+                  Company Operating Expenses
+                </span>
+                <span className="text-[11px] text-slate-400">
+                  Domains, Meta &amp; digital ads, software tools &amp; office rent
+                </span>
+              </div>
+            </div>
+            <div className="text-right">
+              <div className="text-xl sm:text-2xl font-black text-slate-900 group-hover:text-purple-600 transition">
+                ₹{totalCompanyExpenses.toLocaleString("en-IN")}
+              </div>
+              <span className="text-xs text-purple-600 font-bold group-hover:underline inline-flex items-center gap-1">
+                <span>Manage Expenses</span>
+                <ArrowRight className="w-3 h-3 group-hover:translate-x-1 transition" />
+              </span>
+            </div>
+          </div>
+        </Link>
       </div>
 
       {/* Pending Sales Payments & Customer Lifecycle Tracker */}
