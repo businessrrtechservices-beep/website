@@ -11,7 +11,8 @@ export type ExpenseCategory =
 
 export type ExpenseFundedSource =
   | "shop_wallet" // Paid from shop cash/UPI wallet (auto-debits ledger)
-  | "partner_personal" // Paid from partner's personal pocket (credits partner's equity investment)
+  | "partner_borrowing" // Out-of-pocket (e.g. Courier, Errand) - atomic paired Credit Borrow + Debit Expense (0 wallet mismatch)
+  | "partner_personal" // Capital Contribution - partner paid personally and adds to partner's equity investment
   | "partner_investment"; // Deducted from partner's invested capital pool
 
 export interface ExpenseRecord {
@@ -30,6 +31,7 @@ export interface ExpenseRecord {
   partnerName?: string;
   notes?: string;
   linkedLedgerTxId?: string;
+  pairedCreditLedgerTxId?: string; // For atomic out-of-pocket pairs
   linkedBorrowingTxId?: string;
   createdAt: string;
   updatedAt: string;

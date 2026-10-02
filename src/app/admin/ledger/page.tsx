@@ -867,13 +867,15 @@ export default function AdminLedgerPage() {
                     <div className="p-3.5 rounded-xl bg-rose-50/80 border border-rose-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
                       <div>
                         <span className="font-bold text-rose-900 block">General Shop &amp; Operating Expense</span>
-                        <span className="text-[11px] text-rose-700">Debits cash/bank wallet. For dedicated Meta Ads &amp; Domain analytics, visit Company Expenses.</span>
+                        <span className="text-[11px] text-rose-700">
+                          Paid personally for Courier / Errands? Use <strong>Quick Courier Pay</strong> in Company Expenses to auto-pair Credit+Debit with <strong>zero wallet mismatch</strong>!
+                        </span>
                       </div>
                       <Link
                         href="/admin/expenses"
-                        className="px-2.5 py-1 rounded-lg bg-white border border-rose-300 text-rose-700 font-bold text-xs hover:bg-rose-100 transition whitespace-nowrap self-start sm:self-auto"
+                        className="px-2.5 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs transition whitespace-nowrap self-start sm:self-auto shadow-2xs"
                       >
-                        Company Expenses &rarr;
+                        ⚡ Quick Courier Pay &rarr;
                       </Link>
                     </div>
                   )}

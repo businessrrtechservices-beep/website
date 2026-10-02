@@ -1,5 +1,5 @@
 import { getMongoDb } from "./mongodb";
-import { ExpenseRecord, ExpenseSummary, ExpenseCategory } from "./expenseTypes";
+import { ExpenseRecord, ExpenseSummary, ExpenseCategory, ExpenseFundedSource } from "./expenseTypes";
 import { createTransaction, deleteTransaction } from "./ledgerDb";
 import { recordPartnerTransaction, deleteBorrowingTransaction } from "./borrowingDb";
 import { parseToISTIsoString, getNowISTIsoString, getISTDateString } from "./dateUtils";
@@ -170,7 +170,7 @@ export async function createExpense(data: {
   referenceNumber?: string;
   proofUrl?: string;
   proofPublicId?: string;
-  fundedBy?: "shop_wallet" | "partner_personal" | "partner_investment";
+  fundedBy?: ExpenseFundedSource;
   partnerId?: string;
   partnerName?: string;
   notes?: string;
@@ -183,6 +183,7 @@ export async function createExpense(data: {
   const fundedBy = data.fundedBy || "shop_wallet";
 
   let linkedLedgerTxId: string | undefined = undefined;
+  let pairedCreditLedgerTxId: string | undefined = undefined;
   let linkedBorrowingTxId: string | undefined = undefined;
 
   // 1. If funded by Shop Wallet, auto-debit the Wallet Ledger
@@ -206,7 +207,60 @@ export async function createExpense(data: {
     }
   }
 
-  // 2. If personally paid by Partner, record as partner investment equity
+  // 2. Middle Way: Out-of-Pocket Direct Pay (Courier, Errands, Urgent Parts)
+  // Atomically logs both Credit (Borrowing from Partner) + Debit (Expense)
+  // Net cash wallet impact is mathematically 0 (guaranteed NO wallet balance mismatch!)
+  if (fundedBy === "partner_borrowing" && data.partnerId) {
+    try {
+      const pName = data.partnerName || "Partner";
+
+      // A. Increase Partner's borrowed debt (Shop owes partner this reimbursement)
+      const bTx = await recordPartnerTransaction({
+        partnerId: data.partnerId,
+        type: "borrow",
+        amount,
+        paymentMode: (data.paymentMode as any) || "UPI",
+        date: expenseDate,
+        reason: `Out-of-Pocket paid by ${pName} for: ${data.title} (${data.category})`,
+        referenceNumber: data.referenceNumber,
+        proofUrl: data.proofUrl,
+        syncMainLedger: false, // Handled atomically below to guarantee zero wallet balance mismatch!
+      });
+      linkedBorrowingTxId = bTx.id;
+
+      // B1. Paired Credit: Lent by Partner for out-of-pocket expense
+      const creditTx = await createTransaction({
+        type: "credit",
+        amount,
+        paymentMode: (data.paymentMode as any) || "UPI",
+        category: "Partner Borrowing",
+        reason: `Lent by ${pName} [Out-of-Pocket: ${data.title}]`,
+        referenceNumber: data.referenceNumber,
+        proofUrl: data.proofUrl,
+        proofPublicId: data.proofPublicId,
+        date: expenseDate,
+      });
+      pairedCreditLedgerTxId = creditTx.id;
+
+      // B2. Paired Debit: Direct operational expense paid
+      const debitTx = await createTransaction({
+        type: "debit",
+        amount,
+        paymentMode: (data.paymentMode as any) || "UPI",
+        category: "Office Expense",
+        reason: `Expense: ${data.title} [${data.category}] (Paid directly by ${pName})`,
+        referenceNumber: data.referenceNumber,
+        proofUrl: data.proofUrl,
+        proofPublicId: data.proofPublicId,
+        date: expenseDate,
+      });
+      linkedLedgerTxId = debitTx.id;
+    } catch (err) {
+      console.error("Failed to record atomic out-of-pocket borrowing expense:", err);
+    }
+  }
+
+  // 3. If personally paid by Partner as Capital Investment
   if (fundedBy === "partner_personal" && data.partnerId) {
     try {
       const bTx = await recordPartnerTransaction({
@@ -226,7 +280,7 @@ export async function createExpense(data: {
     }
   }
 
-  // 3. If funded from Partner Investment Pool, deduct that partner's invested balance
+  // 4. If funded from Partner Investment Pool, deduct that partner's invested balance
   if (fundedBy === "partner_investment" && data.partnerId) {
     try {
       const bTx = await recordPartnerTransaction({
@@ -262,6 +316,7 @@ export async function createExpense(data: {
     partnerName: data.partnerName || undefined,
     notes: data.notes?.trim() || undefined,
     linkedLedgerTxId,
+    pairedCreditLedgerTxId,
     linkedBorrowingTxId,
     createdAt: getNowISTIsoString(),
     updatedAt: getNowISTIsoString(),
@@ -278,7 +333,7 @@ export async function deleteExpense(id: string): Promise<boolean> {
   const expense = await collection.findOne({ $or: [{ id }, { _id: id } as any] });
   if (!expense) return false;
 
-  // 1. Rollback linked ledger transaction if any
+  // 1. Rollback linked ledger transactions if any
   if (expense.linkedLedgerTxId) {
     try {
       await deleteTransaction(expense.linkedLedgerTxId);
@@ -287,7 +342,16 @@ export async function deleteExpense(id: string): Promise<boolean> {
     }
   }
 
-  // 2. Rollback linked borrowing/investment transaction if any
+  // 2. Rollback paired credit transaction if atomic out-of-pocket pair
+  if (expense.pairedCreditLedgerTxId) {
+    try {
+      await deleteTransaction(expense.pairedCreditLedgerTxId);
+    } catch (err) {
+      console.error("Failed to rollback paired credit transaction on expense delete:", err);
+    }
+  }
+
+  // 3. Rollback linked borrowing/investment transaction if any
   if (expense.linkedBorrowingTxId) {
     try {
       await deleteBorrowingTransaction(expense.linkedBorrowingTxId);

@@ -22,6 +22,8 @@ import {
   Truck,
   Wallet,
   CreditCard,
+  Handshake,
+  Package,
 } from "lucide-react";
 import { InventoryCategory, InventoryItem, StockAllocationRecord } from "@/lib/inventoryTypes";
 import { Dealer } from "@/lib/dealerTypes";
@@ -40,6 +42,22 @@ export default function AdminInventoryPage() {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isSubcategoryModalOpen, setIsSubcategoryModalOpen] = useState(false);
   const [selectedItemForAudit, setSelectedItemForAudit] = useState<InventoryItem | null>(null);
+
+  // 1-Click Restock Modal State
+  const [selectedItemForRestock, setSelectedItemForRestock] = useState<InventoryItem | null>(null);
+  const [restockQty, setRestockQty] = useState("1");
+  const [restockPurchasePrice, setRestockPurchasePrice] = useState("");
+  const [restockSellingPrice, setRestockSellingPrice] = useState("");
+  const [restockFinanceMode, setRestockFinanceMode] = useState<"wallet" | "credit" | "partner_borrowing" | "none">("wallet");
+  const [restockPaymentMode, setRestockPaymentMode] = useState<"Cash" | "UPI" | "Bank Transfer" | "Card" | "Cheque">("Cash");
+  const [restockPaymentRef, setRestockPaymentRef] = useState("");
+  const [restockDealerId, setRestockDealerId] = useState("");
+  const [restockPartnerId, setRestockPartnerId] = useState("");
+  const [restockSerials, setRestockSerials] = useState("");
+  const [restockSplitUnits, setRestockSplitUnits] = useState(false);
+  const [restockSubmitting, setRestockSubmitting] = useState(false);
+  const [restockError, setRestockError] = useState<string | null>(null);
+  const [partnerWallets, setPartnerWallets] = useState<any[]>([]);
 
   // Form state
   const [formName, setFormName] = useState("");
@@ -180,10 +198,94 @@ export default function AdminInventoryPage() {
     }
   };
 
+  const fetchPartnerWallets = async () => {
+    try {
+      const res = await fetch("/api/borrowing");
+      if (res.ok) {
+        const data = await res.json();
+        const wallets = data.wallets || [];
+        setPartnerWallets(wallets);
+        if (wallets.length > 0 && !restockPartnerId) {
+          setRestockPartnerId(wallets[0].id);
+        }
+      }
+    } catch (err) {
+      console.error("Failed to load partner wallets:", err);
+    }
+  };
+
+  const handleOpenRestockModal = (item: InventoryItem) => {
+    setSelectedItemForRestock(item);
+    setRestockQty("1");
+    setRestockPurchasePrice(item.purchasePrice ? String(item.purchasePrice) : "");
+    setRestockSellingPrice(item.sellingPrice ? String(item.sellingPrice) : "");
+    setRestockFinanceMode(item.dealerId ? "credit" : "wallet");
+    setRestockPaymentMode("Cash");
+    setRestockPaymentRef("");
+    setRestockDealerId(item.dealerId || "");
+    setRestockSerials("");
+    setRestockSplitUnits(false);
+    setRestockError(null);
+    if (partnerWallets.length > 0 && !restockPartnerId) {
+      setRestockPartnerId(partnerWallets[0].id);
+    }
+  };
+
+  const handleConfirmRestock = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedItemForRestock) return;
+
+    const qty = parseInt(restockQty, 10);
+    if (!qty || qty <= 0) {
+      setRestockError("Please enter a valid restock quantity");
+      return;
+    }
+
+    setRestockSubmitting(true);
+    setRestockError(null);
+
+    try {
+      const selectedDealer = dealers.find((d) => d.id === restockDealerId);
+      const selectedPartner = partnerWallets.find((p) => p.id === restockPartnerId);
+
+      const res = await fetch(`/api/inventory/items/${selectedItemForRestock.id}/restock`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          stockQuantity: qty,
+          purchasePrice: parseFloat(restockPurchasePrice) || 0,
+          sellingPrice: parseFloat(restockSellingPrice) || 0,
+          financeMode: restockFinanceMode,
+          paymentMode: restockPaymentMode,
+          paymentRef: restockPaymentRef.trim(),
+          dealerId: restockDealerId || undefined,
+          dealerName: selectedDealer?.name || undefined,
+          partnerId: restockFinanceMode === "partner_borrowing" ? restockPartnerId : undefined,
+          partnerName: restockFinanceMode === "partner_borrowing" ? selectedPartner?.name : undefined,
+          serialNumbers: restockSerials ? restockSerials.split(/[\n,]+/).map((s) => s.trim()).filter(Boolean) : [],
+          splitUnits: restockSplitUnits,
+        }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || "Failed to restock item");
+      }
+
+      setSelectedItemForRestock(null);
+      await fetchItems();
+    } catch (err: any) {
+      setRestockError(err.message || "Failed to restock item");
+    } finally {
+      setRestockSubmitting(false);
+    }
+  };
+
   useEffect(() => {
     fetchCategories();
     fetchDealers();
     fetchBrands();
+    fetchPartnerWallets();
   }, []);
 
   useEffect(() => {
@@ -652,15 +754,26 @@ export default function AdminInventoryPage() {
                         </button>
                       </td>
 
-                      {/* Actions */}
+                      {/* Actions: Restock + Delete */}
                       <td className="py-3 px-4 text-center whitespace-nowrap">
-                        <button
-                          onClick={() => handleDeleteItem(item.id)}
-                          className="p-1 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition cursor-pointer"
-                          title="Delete item"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
+                        <div className="flex items-center justify-center gap-1.5">
+                          <button
+                            onClick={() => handleOpenRestockModal(item)}
+                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-[11px] font-bold transition cursor-pointer border border-emerald-200 shadow-2xs"
+                            title="Restock item without re-entering product details"
+                          >
+                            <Plus className="w-3 h-3 text-emerald-600" />
+                            <span>Restock</span>
+                          </button>
+
+                          <button
+                            onClick={() => handleDeleteItem(item.id)}
+                            className="p-1 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition cursor-pointer"
+                            title="Delete item"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   );
@@ -1494,6 +1607,323 @@ export default function AdminInventoryPage() {
                   className="px-4 py-1.5 rounded-lg bg-indigo-600 text-white text-xs font-bold"
                 >
                   Save Brand
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* 1-Click Fast Restock Modal Dialog */}
+      {selectedItemForRestock && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 max-h-[92vh] overflow-y-auto">
+            {/* Modal Header */}
+            <div className="flex items-start justify-between pb-3.5 border-b border-slate-100">
+              <div>
+                <span className="text-[10px] font-black uppercase tracking-wider text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 inline-block mb-1">
+                  ⚡ 1-Click Quick Restock
+                </span>
+                <h3 className="text-base sm:text-lg font-black text-slate-900 leading-tight">
+                  Restock: {selectedItemForRestock.name}
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Product specs and details are automatically repopulated. Enter only restocking quantities &amp; accounting.
+                </p>
+              </div>
+              <button
+                onClick={() => setSelectedItemForRestock(null)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Pre-populated Product Chip */}
+            <div className="my-3.5 p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs space-y-1.5">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span className="font-bold text-slate-800">
+                  {selectedItemForRestock.brand ? `${selectedItemForRestock.brand} ` : ""}
+                  {selectedItemForRestock.model ? `• ${selectedItemForRestock.model}` : ""}
+                </span>
+                <span className="px-2 py-0.5 rounded bg-blue-50 text-blue-700 font-bold text-[10px] border border-blue-200">
+                  {selectedItemForRestock.category} / {selectedItemForRestock.subcategory}
+                </span>
+              </div>
+              <div className="flex items-center justify-between text-[11px] text-slate-500 border-t border-slate-200/60 pt-1.5">
+                <span>
+                  Current Stock:{" "}
+                  <strong className="text-slate-800">
+                    {selectedItemForRestock.availableQuantity} available
+                  </strong>{" "}
+                  ({selectedItemForRestock.stockQuantity} total)
+                </span>
+                <span className="font-mono text-slate-600">
+                  SKU: {selectedItemForRestock.code}
+                </span>
+              </div>
+            </div>
+
+            {restockError && (
+              <div className="mb-3.5 p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                <span>{restockError}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleConfirmRestock} className="space-y-4">
+              {/* Restock Quantity, Cost, Selling Price */}
+              <div className="grid grid-cols-3 gap-2.5">
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1">
+                    +Restock Qty *
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    required
+                    value={restockQty}
+                    onChange={(e) => setRestockQty(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl border border-emerald-300 text-slate-900 text-sm font-black focus:outline-emerald-600 bg-emerald-50/30"
+                    placeholder="e.g. 5"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1">
+                    Cost/Unit (₹) *
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    required
+                    value={restockPurchasePrice}
+                    onChange={(e) => setRestockPurchasePrice(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-300 text-slate-900 text-sm font-bold focus:outline-blue-600"
+                    placeholder="e.g. 1500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1">
+                    Sell Price (₹) *
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    required
+                    value={restockSellingPrice}
+                    onChange={(e) => setRestockSellingPrice(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-300 text-slate-900 text-sm font-bold focus:outline-blue-600"
+                    placeholder="e.g. 2200"
+                  />
+                </div>
+              </div>
+
+              {/* Total Restock Value Banner */}
+              <div className="p-2.5 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center justify-between text-xs">
+                <span className="text-emerald-800 font-semibold">Total Restock Purchase Value:</span>
+                <span className="font-black text-emerald-800 text-sm font-mono">
+                  ₹{(
+                    (parseInt(restockQty, 10) || 0) * (parseFloat(restockPurchasePrice) || 0)
+                  ).toLocaleString("en-IN")}
+                </span>
+              </div>
+
+              {/* Payment & Accounting Settlement Options */}
+              <div className="space-y-2">
+                <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider">
+                  Payment &amp; Accounting Settlement *
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setRestockFinanceMode("wallet")}
+                    className={`p-2.5 rounded-xl border text-left transition cursor-pointer ${
+                      restockFinanceMode === "wallet"
+                        ? "border-blue-600 bg-blue-50 text-blue-900 shadow-2xs font-bold"
+                        : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                    }`}
+                  >
+                    <div className="flex items-center gap-1.5 text-xs font-bold">
+                      <Wallet className="w-3.5 h-3.5 text-blue-600" />
+                      <span>Shop Cash / UPI Wallet</span>
+                    </div>
+                    <span className="text-[10px] text-slate-500 font-normal block mt-0.5">
+                      Auto-debit ledger wallet drawer
+                    </span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setRestockFinanceMode("credit")}
+                    className={`p-2.5 rounded-xl border text-left transition cursor-pointer ${
+                      restockFinanceMode === "credit"
+                        ? "border-indigo-600 bg-indigo-50 text-indigo-900 shadow-2xs font-bold"
+                        : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                    }`}
+                  >
+                    <div className="flex items-center gap-1.5 text-xs font-bold">
+                      <Truck className="w-3.5 h-3.5 text-indigo-600" />
+                      <span>Dealer Credit</span>
+                    </div>
+                    <span className="text-[10px] text-slate-500 font-normal block mt-0.5">
+                      Increase supplier debt balance
+                    </span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setRestockFinanceMode("partner_borrowing")}
+                    className={`p-2.5 rounded-xl border text-left transition cursor-pointer ${
+                      restockFinanceMode === "partner_borrowing"
+                        ? "border-amber-600 bg-amber-50 text-amber-900 shadow-2xs font-bold"
+                        : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                    }`}
+                  >
+                    <div className="flex items-center gap-1.5 text-xs font-bold text-amber-900">
+                      <Handshake className="w-3.5 h-3.5 text-amber-600" />
+                      <span>Partner Out-of-Pocket</span>
+                    </div>
+                    <span className="text-[10px] text-slate-500 font-normal block mt-0.5">
+                      Net ₹0 cash; shop owes partner
+                    </span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setRestockFinanceMode("none")}
+                    className={`p-2.5 rounded-xl border text-left transition cursor-pointer ${
+                      restockFinanceMode === "none"
+                        ? "border-slate-600 bg-slate-100 text-slate-900 shadow-2xs font-bold"
+                        : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                    }`}
+                  >
+                    <div className="flex items-center gap-1.5 text-xs font-bold">
+                      <Boxes className="w-3.5 h-3.5 text-slate-500" />
+                      <span>No Ledger Entry</span>
+                    </div>
+                    <span className="text-[10px] text-slate-500 font-normal block mt-0.5">
+                      Stock count adjustment only
+                    </span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Conditional Partner / Dealer Selectors */}
+              {restockFinanceMode === "partner_borrowing" && (
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1">
+                    Select Paying Partner
+                  </label>
+                  <select
+                    value={restockPartnerId}
+                    onChange={(e) => setRestockPartnerId(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-semibold text-slate-900 bg-white focus:outline-amber-600"
+                  >
+                    {partnerWallets.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {/* Payment Mode & Reference (for wallet or partner) */}
+              {(restockFinanceMode === "wallet" || restockFinanceMode === "partner_borrowing") && (
+                <div className="grid grid-cols-2 gap-2.5">
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1">
+                      Payment Mode
+                    </label>
+                    <select
+                      value={restockPaymentMode}
+                      onChange={(e) => setRestockPaymentMode(e.target.value as any)}
+                      className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-semibold text-slate-900 bg-white focus:outline-blue-600"
+                    >
+                      <option value="Cash">Cash at Counter</option>
+                      <option value="UPI">UPI / GPay / PhonePe</option>
+                      <option value="Bank Transfer">Bank Transfer (IMPS/NEFT)</option>
+                      <option value="Card">Debit / Credit Card</option>
+                      <option value="Cheque">Cheque</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1">
+                      Ref / UTR No. (Optional)
+                    </label>
+                    <input
+                      type="text"
+                      value={restockPaymentRef}
+                      onChange={(e) => setRestockPaymentRef(e.target.value)}
+                      placeholder="e.g. UPI Ref / Challan #"
+                      className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs text-slate-900 font-mono focus:outline-blue-600"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Supplier / Dealer Selector (if credit or tracking) */}
+              {dealers.length > 0 && (
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1">
+                    Supplier / Dealer {restockFinanceMode === "credit" ? "*" : "(Optional)"}
+                  </label>
+                  <select
+                    value={restockDealerId}
+                    onChange={(e) => setRestockDealerId(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-semibold text-slate-900 bg-white focus:outline-blue-600"
+                  >
+                    <option value="">-- No Dealer Assigned --</option>
+                    {dealers.map((d) => (
+                      <option key={d.id} value={d.id}>
+                        {d.name} &bull; Outstanding Debt: ₹{(d.outstandingBalance || 0).toLocaleString("en-IN")}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {/* Serial Numbers / Batch Toggle */}
+              <div className="pt-1">
+                <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1">
+                  Serial Numbers / IMEI (Optional)
+                </label>
+                <input
+                  type="text"
+                  value={restockSerials}
+                  onChange={(e) => setRestockSerials(e.target.value)}
+                  placeholder="Comma or line separated serials (e.g. SN1001, SN1002)"
+                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs text-slate-900 font-mono focus:outline-blue-600"
+                />
+              </div>
+
+              {/* Modal Buttons */}
+              <div className="pt-2 flex items-center justify-end gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => setSelectedItemForRestock(null)}
+                  className="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={restockSubmitting}
+                  className="inline-flex items-center gap-1.5 px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-xs transition cursor-pointer disabled:opacity-50"
+                >
+                  {restockSubmitting ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      <span>Restocking...</span>
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle2 className="w-3.5 h-3.5" />
+                      <span>Confirm Restock (+{restockQty || 1} Units)</span>
+                    </>
+                  )}
                 </button>
               </div>
             </form>

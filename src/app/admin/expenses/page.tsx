@@ -171,6 +171,21 @@ export default function CompanyExpensesPage() {
     setModalOpen(true);
   };
 
+  const handleOpenCourierQuickPay = () => {
+    setTitle("Courier Charges");
+    setCategory("Courier & Logistics");
+    setAmount("");
+    setVendor("DTDC");
+    setDate(getISTDateTimeLocal());
+    setPaymentMode("UPI");
+    setReferenceNumber("");
+    setFundedBy("partner_borrowing");
+    setNotes("Paid directly to courier delivery partner from personal money");
+    setProofUrl("");
+    setFormError(null);
+    setModalOpen(true);
+  };
+
   const handleSubmitExpense = async (e: React.FormEvent) => {
     e.preventDefault();
     const parsedAmount = parseFloat(amount);
@@ -318,6 +333,15 @@ export default function CompanyExpensesPage() {
           >
             <Download className="w-3.5 h-3.5 text-slate-500" />
             <span className="hidden sm:inline">Export CSV</span>
+          </button>
+
+          <button
+            onClick={handleOpenCourierQuickPay}
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-xs font-bold text-white transition shadow-xs cursor-pointer"
+            title="Log Courier or Errand paid directly from personal pocket without wallet mismatch"
+          >
+            <Package className="w-4 h-4" />
+            <span>⚡ Quick Courier Pay</span>
           </button>
 
           <button
@@ -617,12 +641,22 @@ export default function CompanyExpensesPage() {
                         {exp.fundedBy === "shop_wallet" ? (
                           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 text-[10px] font-bold border border-blue-200">
                             <Wallet className="w-3 h-3" />
-                            <span>Shop Wallet (Ledger)</span>
+                            <span>Shop Drawer (Ledger)</span>
                           </span>
+                        ) : exp.fundedBy === "partner_borrowing" ? (
+                          <div className="space-y-0.5">
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-50 text-amber-900 text-[10px] font-bold border border-amber-300">
+                              <Package className="w-3 h-3 text-amber-600" />
+                              <span>Out-of-Pocket ({exp.partnerName || "Partner"})</span>
+                            </span>
+                            <span className="text-[9px] text-slate-400 block font-mono">
+                              Owed to Partner &bull; Net ₹0 Wallet
+                            </span>
+                          </div>
                         ) : exp.fundedBy === "partner_personal" ? (
                           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 text-[10px] font-bold border border-emerald-200">
                             <Handshake className="w-3 h-3" />
-                            <span>Partner Funded ({exp.partnerName || "Partner"})</span>
+                            <span>Partner Equity ({exp.partnerName || "Partner"})</span>
                           </span>
                         ) : (
                           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-purple-50 text-purple-700 text-[10px] font-bold border border-purple-200">
@@ -847,10 +881,15 @@ export default function CompanyExpensesPage() {
 
               {/* Source of Funds Accounting Selector */}
               <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 space-y-2.5">
-                <label className="block text-xs font-bold text-slate-800 uppercase tracking-wider">
-                  Source of Funds (Accounting Impact) *
-                </label>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <div className="flex items-center justify-between">
+                  <label className="block text-xs font-bold text-slate-800 uppercase tracking-wider">
+                    Source of Funds (Accounting Impact) *
+                  </label>
+                  <span className="text-[10px] text-slate-500">Pick where money came from</span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  {/* Option 1: Shop Wallet */}
                   <button
                     type="button"
                     onClick={() => setFundedBy("shop_wallet")}
@@ -862,13 +901,36 @@ export default function CompanyExpensesPage() {
                   >
                     <div className="flex items-center gap-1.5 text-xs font-bold">
                       <Wallet className="w-4 h-4 text-blue-600" />
-                      <span>Shop Cash/UPI Wallet</span>
+                      <span>Shop Cash Drawer</span>
                     </div>
-                    <p className="text-[10px] text-slate-500 mt-1">
-                      Auto-debits Main Ledger wallet balance immediately.
+                    <p className="text-[10px] text-slate-500 mt-1 leading-snug">
+                      Auto-debits shop wallet ledger immediately.
                     </p>
                   </button>
 
+                  {/* Option 2: Middle Way Out-of-Pocket / Courier Pay */}
+                  <button
+                    type="button"
+                    onClick={() => setFundedBy("partner_borrowing")}
+                    className={`p-2.5 rounded-xl border text-left transition cursor-pointer relative ${
+                      fundedBy === "partner_borrowing"
+                        ? "border-amber-600 bg-amber-50 text-amber-900 shadow-2xs"
+                        : "border-slate-200 bg-white text-slate-700 hover:bg-slate-100"
+                    }`}
+                  >
+                    <div className="flex items-center gap-1.5 text-xs font-bold text-amber-900">
+                      <Package className="w-4 h-4 text-amber-600" />
+                      <span>Paid Out-of-Pocket</span>
+                    </div>
+                    <span className="inline-block mt-0.5 px-1.5 py-0.2 rounded bg-amber-200/80 text-amber-900 text-[9px] font-black uppercase">
+                      Zero Mismatch
+                    </span>
+                    <p className="text-[10px] text-slate-500 mt-1 leading-snug">
+                      Courier/Errand: Auto-pairs Credit+Debit. Net ₹0 to cash drawer; shop owes you!
+                    </p>
+                  </button>
+
+                  {/* Option 3: Personal Capital Investment */}
                   <button
                     type="button"
                     onClick={() => setFundedBy("partner_personal")}
@@ -880,10 +942,10 @@ export default function CompanyExpensesPage() {
                   >
                     <div className="flex items-center gap-1.5 text-xs font-bold">
                       <Handshake className="w-4 h-4 text-emerald-600" />
-                      <span>Personally Paid by Partner</span>
+                      <span>Capital Investment</span>
                     </div>
-                    <p className="text-[10px] text-slate-500 mt-1">
-                      Credits partner&apos;s investment equity balance (no shop cash lost).
+                    <p className="text-[10px] text-slate-500 mt-1 leading-snug">
+                      Partner equity: Adds to partner investment balance.
                     </p>
                   </button>
                 </div>
