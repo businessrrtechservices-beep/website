@@ -1,16 +1,18 @@
 import { PaymentMode } from "./ledgerTypes";
 
 export interface SaleItemLine {
-  itemId: string;
-  itemCode: string; // e.g. RRTS-ITM-1001
+  itemId?: string;
+  itemCode?: string; // e.g. RRTS-ITM-1001 or SAC code (e.g. 9987)
   itemName: string;
-  category: string;
-  brand: string;
-  model: string;
+  category?: string;
+  brand?: string;
+  model?: string;
   serialNumbers?: string[]; // Specific serial number(s) allocated to this customer
   quantity: number;
   unitPrice: number;
   total: number;
+  itemType?: "inventory" | "service" | "custom";
+  description?: string;
 }
 
 export interface CustomerInfo {

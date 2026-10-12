@@ -68,9 +68,14 @@ export async function createInvoice(
   // 1. Save invoice
   await collection.insertOne(newInvoice as any);
 
-  // 2. Allocate inventory stock and update customer allocation records
+  // 2. Allocate inventory stock and update customer allocation records (only for physical inventory items)
   for (const item of newInvoice.items) {
-    if (item.itemId) {
+    const isDirectService =
+      item.itemType === "service" ||
+      item.itemType === "custom" ||
+      item.itemId?.startsWith("SRV-");
+
+    if (item.itemId && !isDirectService) {
       await allocateStockItem(item.itemId, {
         invoiceId: newInvoice.id,
         invoiceNumber: newInvoice.invoiceNumber,

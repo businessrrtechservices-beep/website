@@ -245,7 +245,19 @@ export default function A4InvoiceView({ invoice }: A4InvoiceViewProps) {
                 <tr key={idx} className="divide-x divide-slate-300 hover:bg-slate-50/50">
                   <td className="py-2 px-2 text-center font-mono text-slate-500">{idx + 1}</td>
                   <td className="py-2 px-2.5">
-                    <div className="font-bold text-slate-900">{item.itemName}</div>
+                    <div className="font-bold text-slate-900 flex items-center gap-1.5 flex-wrap">
+                      <span>{item.itemName}</span>
+                      {item.itemType === "service" && (
+                        <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 bg-slate-100 text-slate-700 border border-slate-300 rounded print:border-slate-400">
+                          {item.category || "Service"}
+                        </span>
+                      )}
+                    </div>
+                    {item.description && (
+                      <div className="text-[10px] text-slate-600 italic leading-snug mt-0.5">
+                        {item.description}
+                      </div>
+                    )}
                     {(item.brand || item.model) && (
                       <div className="text-[10px] text-slate-500">
                         {item.brand} {item.model ? `&bull; Model: ${item.model}` : ""}
@@ -258,7 +270,7 @@ export default function A4InvoiceView({ invoice }: A4InvoiceViewProps) {
                     )}
                   </td>
                   <td className="py-2 px-2 text-center font-mono text-[10px] text-slate-600">
-                    {item.itemCode || "8471"}
+                    {item.itemCode || (item.itemType === "service" ? "9987" : "8471")}
                   </td>
                   <td className="py-2 px-2 text-center font-bold text-slate-900">{item.quantity}</td>
                   <td className="py-2 px-2.5 text-right font-mono text-slate-800">

@@ -31,12 +31,27 @@ import {
   UploadCloud,
   Check,
   Share2,
+  Package,
+  Wrench,
+  Sparkles,
 } from "lucide-react";
 import { Invoice, SaleItemLine, CustomerInfo } from "@/lib/salesTypes";
 import { InventoryItem } from "@/lib/inventoryTypes";
 import { PaymentMode } from "@/lib/ledgerTypes";
 import { getISTDateString, formatISTDate } from "@/lib/dateUtils";
 import A4InvoiceView from "@/components/A4InvoiceView";
+
+const COMMON_SERVICE_PRESETS = [
+  { name: "On-Site Visit & Inspection", price: 350, code: "9987", category: "Visit" },
+  { name: "Laptop / Desktop OS & Drivers Setup", price: 500, code: "9987", category: "Service" },
+  { name: "Motherboard / Chip-Level Repair", price: 1500, code: "9987", category: "Repair" },
+  { name: "General Cleaning & Thermal Paste", price: 400, code: "9987", category: "Service" },
+  { name: "Screen / Keyboard Replacement Labor", price: 450, code: "9987", category: "Labor" },
+  { name: "Data Recovery & Backup Service", price: 1200, code: "9987", category: "Service" },
+  { name: "Network / Wi-Fi / Router Setup", price: 600, code: "9987", category: "Service" },
+  { name: "CCTV Installation / Service Visit", price: 800, code: "9987", category: "Visit" },
+  { name: "Annual Maintenance Contract (AMC)", price: 2500, code: "9987", category: "AMC" },
+];
 
 export default function AdminSalesPage() {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
@@ -79,10 +94,21 @@ export default function AdminSalesPage() {
   
   // Line items in sale
   const [saleItems, setSaleItems] = useState<SaleItemLine[]>([]);
+  const [itemSourceMode, setItemSourceMode] = useState<"inventory" | "direct">("inventory");
+  
+  // Inventory item selector
   const [selectedStockId, setSelectedStockId] = useState("");
   const [selectedItemQty, setSelectedItemQty] = useState(1);
   const [selectedItemPrice, setSelectedItemPrice] = useState("");
   const [selectedItemSerials, setSelectedItemSerials] = useState("");
+
+  // Direct service / non-inventory item fields
+  const [directItemName, setDirectItemName] = useState("");
+  const [directCategory, setDirectCategory] = useState("Service");
+  const [directItemCode, setDirectItemCode] = useState("9987");
+  const [directDescription, setDirectDescription] = useState("");
+  const [directQty, setDirectQty] = useState(1);
+  const [directPrice, setDirectPrice] = useState("");
 
   // Payment & Financials
   const [discount, setDiscount] = useState("0");
@@ -143,6 +169,17 @@ export default function AdminSalesPage() {
     setCustomerEmail("");
     setCustomerAddress("");
     setCustomerGst("");
+    setItemSourceMode("inventory");
+    setSelectedStockId("");
+    setSelectedItemQty(1);
+    setSelectedItemPrice("");
+    setSelectedItemSerials("");
+    setDirectItemName("");
+    setDirectCategory("Service");
+    setDirectItemCode("9987");
+    setDirectDescription("");
+    setDirectQty(1);
+    setDirectPrice("");
     setDiscount("0");
     setTaxRate("0");
     setPaymentStatus("Paid");
@@ -154,7 +191,7 @@ export default function AdminSalesPage() {
     setIsNewSaleOpen(true);
   };
 
-  // Add line item to sale list
+  // Add line item to sale list from inventory stock
   const handleAddLineItem = () => {
     if (!selectedStockId) return;
     const invItem = inventory.find((i) => i.id === selectedStockId);
@@ -183,6 +220,7 @@ export default function AdminSalesPage() {
       quantity: qty,
       unitPrice: price,
       total: qty * price,
+      itemType: "inventory",
     };
 
     setSaleItems([...saleItems, newLine]);
@@ -192,6 +230,43 @@ export default function AdminSalesPage() {
     setSelectedItemQty(1);
     setSelectedItemPrice("");
     setSelectedItemSerials("");
+  };
+
+  // Add direct non-inventory service / visit / labor item
+  const handleAddDirectItem = () => {
+    if (!directItemName.trim()) {
+      alert("Please enter a service or item name");
+      return;
+    }
+    const price = parseFloat(directPrice);
+    if (isNaN(price) || price < 0) {
+      alert("Please enter a valid rate/price");
+      return;
+    }
+    const qty = Math.max(1, directQty || 1);
+
+    const newLine: SaleItemLine = {
+      itemId: `SRV-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+      itemCode: directItemCode.trim() || "9987",
+      itemName: directItemName.trim(),
+      category: directCategory || "Service",
+      brand: "",
+      model: "",
+      quantity: qty,
+      unitPrice: price,
+      total: qty * price,
+      itemType: "service",
+      description: directDescription.trim() || undefined,
+    };
+
+    setSaleItems([...saleItems, newLine]);
+
+    // Reset direct inputs
+    setDirectItemName("");
+    setDirectPrice("");
+    setDirectQty(1);
+    setDirectDescription("");
+    setDirectItemCode("9987");
   };
 
   const handleRemoveLineItem = (index: number) => {
@@ -220,7 +295,7 @@ export default function AdminSalesPage() {
       return;
     }
     if (saleItems.length === 0) {
-      setError("Please add at least one stock item to this sale");
+      setError("Please add at least one item or service to this sale");
       return;
     }
 
@@ -567,11 +642,22 @@ export default function AdminSalesPage() {
                       </td>
 
                       <td className="py-3.5 px-4 max-w-xs">
-                        <div className="truncate text-slate-700 font-medium">
+                        <div className="text-slate-900 font-medium line-clamp-2">
                           {inv.items.map((i) => `${i.quantity}x ${i.itemName}`).join(", ")}
                         </div>
-                        <div className="text-[10px] text-blue-600 font-mono mt-0.5">
-                          {inv.items.map((i) => i.itemCode).filter(Boolean).join(" • ")}
+                        <div className="text-[10px] text-slate-500 font-mono mt-1 flex flex-wrap gap-1">
+                          {inv.items.map((i, idx) => (
+                            <span
+                              key={idx}
+                              className={`px-1.5 py-0.5 rounded text-[9.5px] font-medium ${
+                                i.itemType === "service"
+                                  ? "bg-purple-50 text-purple-700 border border-purple-200 font-sans font-semibold"
+                                  : "bg-blue-50 text-blue-700 border border-blue-200"
+                              }`}
+                            >
+                              {i.itemType === "service" ? `⚡ ${i.category || "Service"}` : i.itemCode || "Stock"}
+                            </span>
+                          ))}
                         </div>
                       </td>
 
@@ -749,103 +835,277 @@ export default function AdminSalesPage() {
                 </div>
               </div>
 
-              {/* Stock Items Allocation */}
+              {/* Stock Items Allocation & Direct Services */}
               <div className="space-y-3 pt-3 border-t border-slate-100">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold uppercase tracking-wider text-slate-600 block">
-                    2. Select Items to Sell / Allocate ({saleItems.length})
-                  </span>
-                  <span className="text-[11px] text-blue-600 font-semibold">
-                    Deducts shelf stock in real-time
-                  </span>
-                </div>
-
-                {/* Item Selector Box */}
-                <div className="p-3.5 rounded-xl bg-blue-50/50 border border-blue-100 space-y-3">
-                  <div className="grid grid-cols-1 sm:grid-cols-4 gap-2.5">
-                    {/* Item dropdown */}
-                    <div className="sm:col-span-2">
-                      <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                        Select Item from Stock
-                      </label>
-                      <select
-                        value={selectedStockId}
-                        onChange={(e) => {
-                          setSelectedStockId(e.target.value);
-                          const itm = inventory.find((i) => i.id === e.target.value);
-                          if (itm) {
-                            setSelectedItemPrice(String(itm.sellingPrice || ""));
-                          }
-                        }}
-                        className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-semibold text-slate-900"
-                      >
-                        <option value="">-- Choose Stock Item --</option>
-                        {inventory.map((inv) => (
-                          <option
-                            key={inv.id}
-                            value={inv.id}
-                            disabled={inv.availableQuantity === 0}
-                          >
-                            [{inv.code}] {inv.name} (Stock: {inv.availableQuantity} left)
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-
-                    {/* Qty */}
-                    <div>
-                      <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                        Quantity
-                      </label>
-                      <input
-                        type="number"
-                        min="1"
-                        value={selectedItemQty}
-                        onChange={(e) => setSelectedItemQty(parseInt(e.target.value, 10) || 1)}
-                        className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-900"
-                      />
-                    </div>
-
-                    {/* Price */}
-                    <div>
-                      <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                        Unit Price (₹)
-                      </label>
-                      <input
-                        type="number"
-                        placeholder="22000"
-                        value={selectedItemPrice}
-                        onChange={(e) => setSelectedItemPrice(e.target.value)}
-                        className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-900"
-                      />
-                    </div>
-                  </div>
-
-                  {/* Serial input if serialized */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                   <div>
-                    <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                      Assigned Serial Number(s) for this customer (e.g. for Laptop/Device)
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="e.g. SN-DELL-89312 (separate multiple with commas)"
-                      value={selectedItemSerials}
-                      onChange={(e) => setSelectedItemSerials(e.target.value)}
-                      className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-mono text-slate-900"
-                    />
+                    <span className="text-xs font-bold uppercase tracking-wider text-slate-700 block">
+                      2. Add Items &amp; Services ({saleItems.length})
+                    </span>
+                    <span className="text-[11px] text-slate-500">
+                      Combine physical inventory goods with direct services, visits or repairs
+                    </span>
                   </div>
 
-                  <div className="flex justify-end">
+                  {/* Mode switcher tabs */}
+                  <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl w-fit border border-slate-200">
                     <button
                       type="button"
-                      onClick={handleAddLineItem}
-                      disabled={!selectedStockId}
-                      className="px-3.5 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition cursor-pointer disabled:opacity-50"
+                      onClick={() => setItemSourceMode("inventory")}
+                      className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+                        itemSourceMode === "inventory"
+                          ? "bg-white text-blue-700 shadow-2xs"
+                          : "text-slate-600 hover:text-slate-900"
+                      }`}
                     >
-                      + Add to Invoice
+                      <Package className="w-3.5 h-3.5" />
+                      <span>📦 Inventory Stock</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setItemSourceMode("direct")}
+                      className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+                        itemSourceMode === "direct"
+                          ? "bg-white text-purple-700 shadow-2xs"
+                          : "text-slate-600 hover:text-slate-900"
+                      }`}
+                    >
+                      <Wrench className="w-3.5 h-3.5" />
+                      <span>⚡ Direct Service / Visit</span>
                     </button>
                   </div>
                 </div>
+
+                {/* Option A: Pick From Inventory Shelf Stock */}
+                {itemSourceMode === "inventory" && (
+                  <div className="p-3.5 rounded-xl bg-blue-50/50 border border-blue-100 space-y-3 animate-fade-in">
+                    <div className="grid grid-cols-1 sm:grid-cols-4 gap-2.5">
+                      {/* Item dropdown */}
+                      <div className="sm:col-span-2">
+                        <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                          Select Item from Stock
+                        </label>
+                        <select
+                          value={selectedStockId}
+                          onChange={(e) => {
+                            setSelectedStockId(e.target.value);
+                            const itm = inventory.find((i) => i.id === e.target.value);
+                            if (itm) {
+                              setSelectedItemPrice(String(itm.sellingPrice || ""));
+                            }
+                          }}
+                          className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-semibold text-slate-900"
+                        >
+                          <option value="">-- Choose Stock Item --</option>
+                          {inventory.map((inv) => (
+                            <option
+                              key={inv.id}
+                              value={inv.id}
+                              disabled={inv.availableQuantity === 0}
+                            >
+                              [{inv.code}] {inv.name} (Stock: {inv.availableQuantity} left)
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      {/* Qty */}
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                          Quantity
+                        </label>
+                        <input
+                          type="number"
+                          min="1"
+                          value={selectedItemQty}
+                          onChange={(e) => setSelectedItemQty(parseInt(e.target.value, 10) || 1)}
+                          className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-900"
+                        />
+                      </div>
+
+                      {/* Price */}
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                          Unit Price (₹)
+                        </label>
+                        <input
+                          type="number"
+                          placeholder="22000"
+                          value={selectedItemPrice}
+                          onChange={(e) => setSelectedItemPrice(e.target.value)}
+                          className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-900"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Serial input if serialized */}
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                        Assigned Serial Number(s) for this customer (e.g. for Laptop/Device)
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="e.g. SN-DELL-89312 (separate multiple with commas)"
+                        value={selectedItemSerials}
+                        onChange={(e) => setSelectedItemSerials(e.target.value)}
+                        className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-mono text-slate-900"
+                      />
+                    </div>
+
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] text-blue-600 font-semibold">
+                        📦 Deducts shelf stock in real-time upon creation
+                      </span>
+                      <button
+                        type="button"
+                        onClick={handleAddLineItem}
+                        disabled={!selectedStockId}
+                        className="px-3.5 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition cursor-pointer disabled:opacity-50"
+                      >
+                        + Add Stock Item to Invoice
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Option B: Add Direct Item / Service / Visit */}
+                {itemSourceMode === "direct" && (
+                  <div className="p-3.5 rounded-xl bg-purple-50/40 border border-purple-100 space-y-3 animate-fade-in">
+                    {/* Quick Preset Buttons */}
+                    <div>
+                      <label className="block text-[11px] font-bold text-purple-900 mb-1.5 flex items-center gap-1">
+                        <Sparkles className="w-3.5 h-3.5 text-purple-600" />
+                        Quick Service &amp; Visit Templates (Click to fill)
+                      </label>
+                      <div className="flex flex-wrap gap-1.5">
+                        {COMMON_SERVICE_PRESETS.map((preset, pIdx) => (
+                          <button
+                            key={pIdx}
+                            type="button"
+                            onClick={() => {
+                              setDirectItemName(preset.name);
+                              setDirectPrice(preset.price.toString());
+                              setDirectCategory(preset.category);
+                              setDirectItemCode(preset.code);
+                              setDirectQty(1);
+                            }}
+                            className="px-2.5 py-1 rounded-lg bg-white hover:bg-purple-100 border border-purple-200 text-[11px] font-medium text-purple-800 transition cursor-pointer flex items-center gap-1 shadow-2xs"
+                          >
+                            <span>{preset.name}</span>
+                            <span className="font-bold font-mono text-purple-900">₹{preset.price}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-12 gap-2.5 pt-1 border-t border-purple-100">
+                      {/* Service Name */}
+                      <div className="sm:col-span-5">
+                        <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                          Service / Item Name <span className="text-rose-500">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="e.g. On-Site Inspection Charge / Motherboard Repair"
+                          value={directItemName}
+                          onChange={(e) => setDirectItemName(e.target.value)}
+                          className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-purple-600"
+                        />
+                      </div>
+
+                      {/* Category */}
+                      <div className="sm:col-span-2">
+                        <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                          Category
+                        </label>
+                        <select
+                          value={directCategory}
+                          onChange={(e) => setDirectCategory(e.target.value)}
+                          className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-purple-600"
+                        >
+                          <option value="Service">Service</option>
+                          <option value="Visit">Visit</option>
+                          <option value="Repair">Repair</option>
+                          <option value="Labor">Labor</option>
+                          <option value="Installation">Installation</option>
+                          <option value="AMC">AMC</option>
+                          <option value="Custom">Custom</option>
+                        </select>
+                      </div>
+
+                      {/* SAC Code */}
+                      <div className="sm:col-span-2">
+                        <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                          SAC / HSN Code
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="9987"
+                          value={directItemCode}
+                          onChange={(e) => setDirectItemCode(e.target.value)}
+                          className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-mono font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-purple-600"
+                        />
+                      </div>
+
+                      {/* Qty */}
+                      <div className="sm:col-span-1">
+                        <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                          Qty
+                        </label>
+                        <input
+                          type="number"
+                          min="1"
+                          value={directQty}
+                          onChange={(e) => setDirectQty(parseInt(e.target.value, 10) || 1)}
+                          className="w-full px-2 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-900 text-center focus:outline-none focus:ring-2 focus:ring-purple-600"
+                        />
+                      </div>
+
+                      {/* Rate / Price */}
+                      <div className="sm:col-span-2">
+                        <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                          Rate (₹) <span className="text-rose-500">*</span>
+                        </label>
+                        <input
+                          type="number"
+                          placeholder="500"
+                          value={directPrice}
+                          onChange={(e) => setDirectPrice(e.target.value)}
+                          className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-purple-600"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Optional Description / Scope */}
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                        Service Description / Scope (Optional - printed on invoice)
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="e.g. On-site visit to client office in Baner, thermal paste replacement and fan cleaning"
+                        value={directDescription}
+                        onChange={(e) => setDirectDescription(e.target.value)}
+                        className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-purple-600"
+                      />
+                    </div>
+
+                    <div className="flex items-center justify-between pt-1">
+                      <span className="text-[11px] text-purple-700 font-semibold">
+                        ⚡ Non-inventory item: Will NOT deduct physical shelf inventory
+                      </span>
+                      <button
+                        type="button"
+                        onClick={handleAddDirectItem}
+                        disabled={!directItemName.trim() || !directPrice}
+                        className="px-4 py-1.5 rounded-lg bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold transition cursor-pointer disabled:opacity-50 flex items-center gap-1.5 shadow-xs"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        <span>+ Add Service / Item to Invoice</span>
+                      </button>
+                    </div>
+                  </div>
+                )}
 
                 {/* Line items table */}
                 {saleItems.length > 0 ? (
@@ -853,8 +1113,9 @@ export default function AdminSalesPage() {
                     <table className="w-full text-left">
                       <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold uppercase text-[10px]">
                         <tr>
-                          <th className="py-2.5 px-3">Item / Code</th>
-                          <th className="py-2.5 px-3">Serial(s)</th>
+                          <th className="py-2.5 px-3">Item / Service</th>
+                          <th className="py-2.5 px-3">Type &amp; Code</th>
+                          <th className="py-2.5 px-3">Serial(s) / Details</th>
                           <th className="py-2.5 px-3 text-center">Qty</th>
                           <th className="py-2.5 px-3 text-right">Price</th>
                           <th className="py-2.5 px-3 text-right">Total</th>
@@ -864,29 +1125,47 @@ export default function AdminSalesPage() {
                       <tbody className="divide-y divide-slate-100">
                         {saleItems.map((item, idx) => (
                           <tr key={idx} className="hover:bg-slate-50/50">
-                            <td className="py-2 px-3">
-                              <span className="font-mono text-[10px] text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded mr-1.5">
-                                {item.itemCode}
-                              </span>
-                              <span className="font-bold text-slate-900">{item.itemName}</span>
+                            <td className="py-2.5 px-3">
+                              <span className="font-bold text-slate-900 block">{item.itemName}</span>
+                              {item.description && (
+                                <span className="text-[10.5px] text-slate-500 italic block mt-0.5">
+                                  {item.description}
+                                </span>
+                              )}
                             </td>
-                            <td className="py-2 px-3 text-slate-500 font-mono text-[10px]">
-                              {item.serialNumbers?.join(", ") || "-"}
+                            <td className="py-2.5 px-3 whitespace-nowrap">
+                              {item.itemType === "service" ? (
+                                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-purple-50 text-purple-700 border border-purple-200 font-sans">
+                                  ⚡ {item.category || "Service"} ({item.itemCode || "9987"})
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200 font-mono">
+                                  📦 {item.itemCode}
+                                </span>
+                              )}
                             </td>
-                            <td className="py-2 px-3 text-center font-bold text-slate-800">
+                            <td className="py-2.5 px-3 text-slate-500 font-mono text-[10px]">
+                              {item.itemType === "service" ? (
+                                <span className="text-slate-400 font-sans italic text-[10.5px]">Non-inventory</span>
+                              ) : (
+                                item.serialNumbers?.join(", ") || "-"
+                              )}
+                            </td>
+                            <td className="py-2.5 px-3 text-center font-bold text-slate-800">
                               {item.quantity}
                             </td>
-                            <td className="py-2 px-3 text-right text-slate-700">
+                            <td className="py-2.5 px-3 text-right text-slate-700 font-mono">
                               ₹{item.unitPrice.toLocaleString("en-IN")}
                             </td>
-                            <td className="py-2 px-3 text-right font-black text-slate-900">
+                            <td className="py-2.5 px-3 text-right font-black text-slate-900 font-mono">
                               ₹{item.total.toLocaleString("en-IN")}
                             </td>
-                            <td className="py-2 px-3 text-center">
+                            <td className="py-2.5 px-3 text-center">
                               <button
                                 type="button"
                                 onClick={() => handleRemoveLineItem(idx)}
-                                className="text-rose-500 hover:text-rose-700"
+                                className="text-rose-500 hover:text-rose-700 cursor-pointer p-1 rounded hover:bg-rose-50 transition"
+                                title="Remove item"
                               >
                                 <Trash2 className="w-3.5 h-3.5 mx-auto" />
                               </button>
@@ -897,7 +1176,7 @@ export default function AdminSalesPage() {
                     </table>
                   </div>
                 ) : (
-                  <p className="text-xs text-slate-400 italic">No items added to invoice yet.</p>
+                  <p className="text-xs text-slate-400 italic">No items or services added to invoice yet.</p>
                 )}
               </div>
 
